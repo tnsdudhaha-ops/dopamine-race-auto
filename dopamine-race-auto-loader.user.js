@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO Loader
 // @namespace    dopamine-race-loader
-// @version      1.1.1
+// @version      1.1.2
 // @description  Firefox Tampermonkey용 GitHub 최신 AUTO 로더 (게임 접속 시 자동 확인)
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
 // @grant        GM_xmlhttpRequest
@@ -11,11 +11,12 @@
 // @connect      script.googleusercontent.com
 // @grant        unsafeWindow
 // @connect      raw.githubusercontent.com
+// @connect      api.github.com
 // @run-at       document-idle
 // ==/UserScript==
 (() => {
   'use strict';
-  const SOURCE = 'https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js';
+  const SOURCE = 'https://api.github.com/repos/tnsdudhaha-ops/dopamine-race-auto/contents/dopamine-race-auto.user.js?ref=main';
   const LOG = '[Dopamine AUTO Loader]';
   const notify = (message, error = false) => {
     console[error ? 'error' : 'info'](LOG, message);
@@ -38,7 +39,7 @@
   notify('AUTO 최신 코드 확인 중…');
   GM_xmlhttpRequest({
     method: 'GET',
-    url: SOURCE + '?loader=' + Date.now(),
+    url: SOURCE + '&loader=' + Date.now(),
     timeout: 15000,
     headers: { 'Cache-Control': 'no-cache' },
     onload(response) {
@@ -46,7 +47,16 @@
         notify('AUTO 다운로드 실패: HTTP ' + response.status, true);
         return;
       }
-      const source = response.responseText || '';
+      let source = '';
+      try {
+        const data = JSON.parse(response.responseText || '{}');
+        if (data.encoding !== 'base64' || !data.content) throw new Error('GitHub API 응답 형식 오류');
+        const bytes = Uint8Array.from(atob(data.content.replace(/\\s/g, '')), c => c.charCodeAt(0));
+        source = new TextDecoder('utf-8').decode(bytes);
+      } catch (error) {
+        notify('AUTO 코드 해석 실패: ' + String(error.message || error), true);
+        return;
+      }
       const match = source.match(/^\/\/ @version\s+(\S+)/m);
       if (!source.startsWith('// ==UserScript==') || !source.includes("const VERSION=") || !match) {
         notify('AUTO 코드 형식 확인 실패', true);
