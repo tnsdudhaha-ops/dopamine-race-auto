@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.14
+// @version      3.3.15
 // @description  Release 3.0 / v3.3.5 주행 예측 유지 / 연속 주행 / 설정창 안전 전환
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
@@ -11,7 +11,7 @@
 // ==/UserScript==
 (() => {
 'use strict';
-const VERSION='3.3.14', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.15', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -236,7 +236,7 @@ function panelWidth(){return Math.max(1,Math.min(PANEL_W,viewport().width-MARGIN
 function panelHeightLimit(){return Math.max(0,viewport().height-BUTTON_H-MARGIN*2);}
 function measuredPanelHeight(){if(!expanded)return 0;panel.style.display='block';panel.style.width=panelWidth()+'px';panel.style.maxHeight=panelHeightLimit()+'px';return panel.getBoundingClientRect().height;}
 function bounds(){const vp=viewport();return {minX:MARGIN,maxX:Math.max(MARGIN,vp.width-BUTTON_W-MARGIN),minY:MARGIN,maxY:Math.max(MARGIN,vp.height-BUTTON_H-MARGIN)};}
-function placeUI(){const b=bounds();buttonX=clamp(buttonX,b.minX,b.maxX);buttonY=clamp(buttonY,b.minY,b.maxY);mini.style.left=buttonX+'px';mini.style.top=buttonY+'px';if(!expanded)return;const vp=viewport(),w=panelWidth(),h=measuredPanelHeight();panel.style.left=clamp(buttonX+BUTTON_W-w,MARGIN,Math.max(MARGIN,vp.width-w-MARGIN))+'px';panel.style.top=(buttonY>=h+MARGIN?buttonY-h:clamp(buttonY+BUTTON_H,MARGIN,Math.max(MARGIN,vp.height-h-MARGIN)))+'px';panel.style.right='auto';panel.style.bottom='auto';}
+function placeUI(){const b=bounds();if(expanded){const w=panelWidth(),h=measuredPanelHeight();buttonX=clamp(buttonX,Math.max(b.minX,w-BUTTON_W+MARGIN),b.maxX);buttonY=clamp(buttonY,Math.max(b.minY,h+MARGIN),b.maxY);panel.style.left=(buttonX+BUTTON_W-w)+'px';panel.style.top=(buttonY-h)+'px';panel.style.right='auto';panel.style.bottom='auto';}else{buttonX=clamp(buttonX,b.minX,b.maxX);buttonY=clamp(buttonY,b.minY,b.maxY);}mini.style.left=buttonX+'px';mini.style.top=buttonY+'px';}
 function expandPanel(){expanded=true;panel.style.display='block';placeUI();render();}
 function collapsePanel(){expanded=false;panel.style.display='none';placeUI();render();}
 function savePosition(){try{localStorage.setItem(POSITION_KEY,JSON.stringify({x:buttonX,y:buttonY}));}catch(_){}}
