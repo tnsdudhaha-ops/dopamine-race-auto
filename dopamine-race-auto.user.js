@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.13
+// @version      3.3.14
 // @description  Release 3.0 / v3.3.5 주행 예측 유지 / 연속 주행 / 설정창 안전 전환
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
@@ -11,7 +11,7 @@
 // ==/UserScript==
 (() => {
 'use strict';
-const VERSION='3.3.13', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.14', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -243,6 +243,13 @@ function savePosition(){try{localStorage.setItem(POSITION_KEY,JSON.stringify({x:
 function restorePosition(){const vp=viewport();buttonX=vp.width-BUTTON_W-12;buttonY=vp.height-BUTTON_H-18;try{const s=JSON.parse(localStorage.getItem(POSITION_KEY)||'null');if(Number.isFinite(s?.x)&&Number.isFinite(s?.y)){buttonX=s.x;buttonY=s.y;}}catch(_){}placeUI();}
 // UI interactions are isolated from page-level game handlers. Never stop/restart the driving engine on panel toggle.
 for(const type of ['pointerdown','pointerup','pointermove','pointercancel','mousedown','mouseup','click','dblclick','touchstart','touchmove','touchend','touchcancel']){ui.addEventListener(type,e=>{e.stopPropagation();},{passive:true});}
+// Dragging the panel header moves the same anchor as the floating AUTO button.
+const panelHandle=$('.auto-head');
+panelHandle.style.touchAction='none';
+panelHandle.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;drag={id:e.pointerId,startX:e.clientX,startY:e.clientY,originX:buttonX,originY:buttonY,moved:false,panel:true};try{panelHandle.setPointerCapture(e.pointerId);}catch(_){}});
+panelHandle.addEventListener('pointermove',e=>{if(!drag||!drag.panel||drag.id!==e.pointerId)return;const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;if(Math.abs(dx)+Math.abs(dy)>7)drag.moved=true;if(!drag.moved)return;buttonX=drag.originX+dx;buttonY=drag.originY+dy;placeUI();});
+panelHandle.addEventListener('pointerup',e=>{if(!drag||!drag.panel||drag.id!==e.pointerId)return;if(drag.moved)savePosition();drag=null;});
+panelHandle.addEventListener('pointercancel',()=>{if(drag?.panel)drag=null;});
 mini.addEventListener('pointerdown',e=>{drag={id:e.pointerId,startX:e.clientX,startY:e.clientY,originX:buttonX,originY:buttonY,moved:false};try{mini.setPointerCapture(e.pointerId);}catch(_){}});
 mini.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;if(Math.abs(dx)+Math.abs(dy)>7)drag.moved=true;if(!drag.moved)return;buttonX=drag.originX+dx;buttonY=drag.originY+dy;placeUI();});
 mini.addEventListener('pointerup',e=>{if(!drag||drag.id!==e.pointerId)return;suppressClick=drag.moved;if(drag.moved)savePosition();drag=null;});mini.addEventListener('pointercancel',()=>{drag=null;});mini.addEventListener('click',e=>{e.preventDefault();if(suppressClick){suppressClick=false;return;}expanded?collapsePanel():expandPanel();});details.addEventListener('toggle',()=>{if(expanded)requestAnimationFrame(placeUI);});$('#manage-btn').addEventListener('click',()=>{const area=$('#manage-area');area.style.display=area.style.display==='none'?'block':'none';requestAnimationFrame(placeUI);});
