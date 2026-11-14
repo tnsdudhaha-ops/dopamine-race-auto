@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.16
+// @version      3.3.17
 // @description  Release 3.0 / v3.3.5 주행 예측 유지 / 연속 주행 / 설정창 안전 전환
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
@@ -11,7 +11,7 @@
 // ==/UserScript==
 (() => {
 'use strict';
-const VERSION='3.3.16', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.17', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -249,7 +249,7 @@ function viewport(){return {width:document.documentElement.clientWidth||window.i
 function panelWidth(){return Math.max(1,Math.min(PANEL_W,viewport().width-MARGIN*2));}
 function panelHeightLimit(){return Math.max(0,viewport().height-BUTTON_H-MARGIN*2);}
 function measuredPanelHeight(){if(!expanded)return 0;panel.style.display='block';panel.style.width=panelWidth()+'px';panel.style.maxHeight=panelHeightLimit()+'px';return panel.getBoundingClientRect().height;}
-function bounds(){const vp=viewport();return {minX:MARGIN,maxX:Math.max(MARGIN,vp.width-BUTTON_W-MARGIN),minY:MARGIN,maxY:Math.max(MARGIN,vp.height-BUTTON_H-MARGIN)};}
+function bounds(){const vp=viewport();return {minX:MARGIN,maxX:Math.max(MARGIN,vp.width-BUTTON_W-MARGIN),minY:MARGIN,maxY:Math.max(MARGIN,vp.height-BUTTON_H-2)};}
 function placeUI(){const b=bounds();if(expanded){const w=panelWidth(),h=measuredPanelHeight();buttonX=clamp(buttonX,Math.max(b.minX,w-BUTTON_W+MARGIN),b.maxX);buttonY=clamp(buttonY,Math.max(b.minY,h+MARGIN),b.maxY);panel.style.left=(buttonX+BUTTON_W-w)+'px';panel.style.top=(buttonY-h)+'px';panel.style.right='auto';panel.style.bottom='auto';}else{buttonX=clamp(buttonX,b.minX,b.maxX);buttonY=clamp(buttonY,b.minY,b.maxY);}mini.style.left=buttonX+'px';mini.style.top=buttonY+'px';}
 function expandPanel(){expanded=true;panel.style.display='block';placeUI();render();}
 function collapsePanel(){expanded=false;panel.style.display='none';placeUI();render();}
@@ -261,7 +261,7 @@ for(const type of ['pointerdown','pointerup','pointermove','pointercancel','mous
 const panelHandle=$('.auto-head');
 panelHandle.style.touchAction='none';
 panelHandle.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;drag={id:e.pointerId,startX:e.clientX,startY:e.clientY,originX:buttonX,originY:buttonY,moved:false,panel:true};try{panelHandle.setPointerCapture(e.pointerId);}catch(_){}});
-panelHandle.addEventListener('pointermove',e=>{if(!drag||!drag.panel||drag.id!==e.pointerId)return;const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;if(Math.abs(dx)+Math.abs(dy)>7)drag.moved=true;if(!drag.moved)return;buttonX=drag.originX+dx;buttonY=drag.originY+dy;placeUI();});
+panelHandle.addEventListener('pointermove',e=>{if(!drag||!drag.panel||drag.id!==e.pointerId)return;const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;if(Math.abs(dx)+Math.abs(dy)>7)drag.moved=true;if(!drag.moved)return;buttonX=drag.originX+dx;buttonY=drag.originY+dy;placeUI();drag.originX=buttonX;drag.originY=buttonY;drag.startX=e.clientX;drag.startY=e.clientY;drag.originX=buttonX;drag.originY=buttonY;drag.startX=e.clientX;drag.startY=e.clientY;});
 panelHandle.addEventListener('pointerup',e=>{if(!drag||!drag.panel||drag.id!==e.pointerId)return;if(drag.moved)savePosition();drag=null;});
 panelHandle.addEventListener('pointercancel',()=>{if(drag?.panel)drag=null;});
 mini.addEventListener('pointerdown',e=>{drag={id:e.pointerId,startX:e.clientX,startY:e.clientY,originX:buttonX,originY:buttonY,moved:false};try{mini.setPointerCapture(e.pointerId);}catch(_){}});
