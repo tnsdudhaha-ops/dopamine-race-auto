@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.15
+// @version      3.3.16
 // @description  Release 3.0 / v3.3.5 주행 예측 유지 / 연속 주행 / 설정창 안전 전환
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
@@ -11,7 +11,7 @@
 // ==/UserScript==
 (() => {
 'use strict';
-const VERSION='3.3.15', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.16', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -144,6 +144,20 @@ let detected={};
 let savedRunCount=readSavedRuns().length;
 let runFinalized=false,finishSeenAt=0,finishReason=null,telemetryRejects=0;
 function refreshVehicle(){if(running)return;detected=detectVehicle();profileStatus=detected.confidence;render();}
+function refreshLobbyInfo(){
+  if(destroyed||running)return;
+  const doc=game(),r=root();
+  if(!doc||!r){if(chainCounts!==null){chainCounts=null;render();}return;}
+  const counts=readTireCounts();
+  const next=counts?{hard:counts.hard.count,medium:counts.medium.count,soft:counts.soft.count}:null;
+  const changed=JSON.stringify(next)!==JSON.stringify(chainCounts);
+  if(changed)chainCounts=next;
+  const vehicle=detectVehicle();
+  const vehicleChanged=JSON.stringify(vehicle)!==JSON.stringify(detected);
+  if(vehicleChanged){detected=vehicle;profileStatus=vehicle.confidence;}
+  if(changed||vehicleChanged)render();
+}
+
 function vehicleKey(v){return [v?.name||'unknown',v?.grade||'unknown',v?.stars||'unknown',v?.tire||'unknown',courseId].join('|');}
 // 게임 화면에서 확인되는 속도계만 사용. 정적인 최고속력 설명 문구는 제외.
 function readLiveSpeed(){const doc=game();if(!doc)return null;const nodes=[...doc.querySelectorAll('[aria-label],[data-speed],[class*="speed"],[id*="speed"]')].slice(0,120);for(const el of nodes){if(!visible(el))continue;const attr=el.getAttribute('data-speed');const label=el.getAttribute('aria-label')||'';const txt=textOf(el);if(/최고속|최대속|top.?speed/i.test(label+' '+txt))continue;const m=(attr||label||txt).match(/(?:현재\s*속도|속도|speed)?\s*[:：]?\s*(\d{1,3}(?:\.\d+)?)\s*km\s*\/\s*h/i);if(m)return Number(m[1]);}return null;}
@@ -264,6 +278,7 @@ $('#analysis-copy').onclick=async()=>setMessage(await copyText(JSON.stringify(re
 $('#analysis-download').onclick=()=>{const blob=new Blob([JSON.stringify(readSavedRuns(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='dopamine-v337-analysis.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);setMessage(readSavedRuns().length?'누적 분석 파일 저장 요청':'저장된 분석 기록이 없습니다. 주행 후 다시 시도하세요');};
 function render(){const cs=$('#chain-status');if(cs)cs.textContent='연속: '+(chainEnabled?'작동':'꺼짐')+' / '+chainState+' / 이번 실행 '+chainRuns+'판'+(chainCounts?'\n타이어 잔여 H:'+chainCounts.hard+' M:'+chainCounts.medium+' S:'+chainCounts.soft:'');const c=$('#course-name'),s=$('#status'),v=$('#vehicle-info');if(c)c.textContent=courseName+' ('+courseId+')\n프로필: '+(profile||'자동(기존 학습 없음)');if(v)v.textContent='인식: '+profileStatus+'\n차량: '+(detected.name||'미확인')+'\n등급: '+(detected.grade||'미확인')+' / 별: '+(detected.stars??'미확인')+'\n타이어: '+(detected.tire||'미확인')+'\n표시 최고속력: '+(detected.displayTopSpeedKmh??'미확인')+' km/h\n누적 주행: '+savedRunCount+'회';if(s)s.textContent=lastMessage+'\nBOOST ON: '+boostOnCount+' / OFF: '+boostOffCount+'\n다음: '+boostExpected+'\n마지막 감지: '+lastDetected+'\n판정: '+lastFeedback+'\nPERFECT: '+stats.perfect+' / GREAT: '+stats.great+'\n고속 보정 입력: '+universalStats.highSpeedEvents+'\n가속도 보정 입력: '+universalStats.accelerationUsed+'\n프레임: '+round(averageFrameMs,1)+'ms\n학습 보정: '+stats.adjusted+'회\n실측 최고속도: '+(analysisMaxSpeed===null?'미확인':analysisMaxSpeed+' km/h');const simpleState=$('#simple-state'),simpleTires=$('#simple-tires');if(simpleState)simpleState.textContent=running?'🟢 주행 중':chainEnabled?'🔁 연속 주행':'대기 중';if(simpleTires)simpleTires.textContent=chainCounts?'H '+chainCounts.hard+' · M '+chainCounts.medium+' · S '+chainCounts.soft:'확인 전';mini.textContent=expanded?'✕ AUTO':running?'🟢 AUTO':'🚗 AUTO';}
 function setMessage(m){lastMessage=m;render();}
-function onResize(){placeUI();}function onPageHide(){if(chainEnabled)stopChain('페이지 이동으로 중지');else stop(false);}function destroy(){if(destroyed)return;destroyed=true;if(chainEnabled)stopChain('스크립트 교체로 중지');else stop(false);window.removeEventListener('resize',onResize);window.removeEventListener('pagehide',onPageHide);ui.remove();if(window[INSTANCE]?.destroy===destroy)delete window[INSTANCE];}
-window.addEventListener('resize',onResize);window.addEventListener('pagehide',onPageHide);window[INSTANCE]={destroy};loadProfile();updateInputs();restorePosition();detectCourse();refreshVehicle();collapsePanel();render();
+function onResize(){placeUI();}function onPageHide(){if(chainEnabled)stopChain('페이지 이동으로 중지');else stop(false);}function destroy(){if(destroyed)return;destroyed=true;clearInterval(lobbyInfoTimer);if(chainEnabled)stopChain('스크립트 교체로 중지');else stop(false);window.removeEventListener('resize',onResize);window.removeEventListener('pagehide',onPageHide);ui.remove();if(window[INSTANCE]?.destroy===destroy)delete window[INSTANCE];}
+const lobbyInfoTimer=setInterval(refreshLobbyInfo,1500);
+window.addEventListener('resize',onResize);window.addEventListener('pagehide',onPageHide);window[INSTANCE]={destroy};loadProfile();updateInputs();restorePosition();detectCourse();refreshVehicle();refreshLobbyInfo();collapsePanel();render();
 })();
