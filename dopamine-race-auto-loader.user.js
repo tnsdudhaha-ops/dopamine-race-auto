@@ -64,7 +64,6 @@
     onerror() { notify('AUTO 다운로드 실패: 네트워크 연결 확인', true); },
     ontimeout() { notify('AUTO 다운로드 시간 초과', true); }
   });
-}
   // Telemetry uploader runs independently from the driving engine.
   // Credentials live in Tampermonkey storage, never in the public GitHub script.
   const RUNS_KEY = 'dopamine-auto-v336:runs';
