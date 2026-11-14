@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.17
+// @version      3.3.18
 // @description  Release 3.0 / v3.3.5 주행 예측 유지 / 연속 주행 / 설정창 안전 전환
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
@@ -11,7 +11,7 @@
 // ==/UserScript==
 (() => {
 'use strict';
-const VERSION='3.3.17', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.18', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -84,7 +84,7 @@ function readTireCounts(){
     const t=exact[0].text;
     const m=t.match(/(?:하드|미디엄|미디움|소프트|HARD|MEDIUM|SOFT)[\s\S]{0,35}?(\d)\s*(?:개|회|\/\s*5)/i)||t.match(/(?:^|\s)(\d)\s*(?:개|회)(?:\s|$)/);
     if(!m)return null;
-    const n=Number(m[1]);if(!Number.isInteger(n)||n<0||n>5)return null;
+    const n=Number(m[1]);if(!Number.isInteger(n)||n<0||n>99)return null;
     out[key]={count:n,el:exact[0].el};
   }
   if(new Set(Object.values(out).map(x=>x.el)).size!==3)return null;
