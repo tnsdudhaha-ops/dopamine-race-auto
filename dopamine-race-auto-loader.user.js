@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO Loader
 // @namespace    dopamine-race-loader
-// @version      1.1.0
+// @version      1.1.1
 // @description  Firefox Tampermonkey용 GitHub 최신 AUTO 로더 (게임 접속 시 자동 확인)
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
 // @grant        GM_xmlhttpRequest
@@ -84,6 +84,8 @@
   function setUploadStatus(message) {
     status = message;
     if (configButton) configButton.title = 'Google Sheets 자동 전송: ' + status;
+    const cloud = document.getElementById('cloud-state');
+    if (cloud) cloud.textContent = status;
     console.info(LOG, 'Sheets:', message);
   }
   function configureUpload() {
@@ -160,6 +162,16 @@
   }
   if (document.body) makeConfigButton();
   else document.addEventListener('DOMContentLoaded', makeConfigButton, { once: true });
+  function dockUploadButton() {
+    const slot = document.getElementById('cloud-config-slot');
+    if (slot && configButton && configButton.parentElement !== slot) {
+      configButton.style.cssText = 'position:static;width:100%;margin-top:7px;padding:9px;background:#164e63;color:white;border:1px solid #67e8f9;border-radius:6px;font:12px sans-serif';
+      slot.appendChild(configButton);
+    }
+    const cloud = document.getElementById('cloud-state');
+    if (cloud && cloud.textContent !== status) cloud.textContent = status;
+  }
+  setInterval(dockUploadButton, 1500);
   setInterval(uploadPending, 7000);
   setTimeout(uploadPending, 2500);
 })();
