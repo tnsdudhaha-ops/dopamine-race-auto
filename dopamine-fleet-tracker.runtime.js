@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.35 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.36 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.35';
+  const VERSION = '1.1.36';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -290,6 +290,7 @@
     }
     fleetRefreshing=true;
     const results=[];
+    let successes=0;
     try{
       for(let i=0;i<initial.length;i++){
         const {owner}=initial[i];
@@ -304,11 +305,12 @@
         const garage=db.garages[owner];
         const qty=(garage?.vehicles||[]).reduce((n,v)=>n+(Number(v.qty)||0),0);
         const expected=expectedTotal(p);
+        if(ok)successes++;
         results.push(owner+(ok?' '+garage.vehicles.length+'종/'+qty+'대 (게임 '+(expected===null?'미확인':expected)+'대)':' 저장 실패 (게임 '+(expected===null?'미확인':expected)+'대)'));
         if(!closeGarage(p)){note(owner+' 차고 닫기 실패. 자동 갱신 중단');break;}
         await pause(350);
       }
-      note('전체 차고 갱신 종료: '+results.join(' / '));
+      note('전체 차고 갱신 완료: '+successes+'/6명 성공 · '+(results.length-successes)+'명 실패. '+results.join(' / '));
     }catch(e){note('전체 갱신 오류: '+String(e.message||e));}
     finally{fleetRefreshing=false;}
   }
@@ -494,18 +496,12 @@
     root.style.setProperty('width',collapsed?'190px':'min(370px, calc(100vw - 24px))','important');
     shadow.innerHTML = '<style>:host{all:initial}*{box-sizing:border-box}.wrap{font:13px system-ui,sans-serif;color:#f4f6fa;background:#172334;border:1px solid #9ba7b8;border-radius:12px;box-shadow:0 5px 30px #0009;max-height:70dvh;overflow:auto}.top{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#29405b}button,select{background:#395471;color:#fff;border:1px solid #9aafc4;border-radius:6px;padding:7px;cursor:pointer;margin:2px}.body{padding:8px}.info{display:block;color:#d7e0ee;margin:6px 0;overflow-wrap:anywhere}table{width:100%;font-size:12px;border-collapse:collapse}td{border-bottom:1px solid #53657c;padding:4px}h4{margin:8px 0 3px}</style>'+
     '<div class="wrap"><div class="top"><b>🚗 차량 추적기 v'+VERSION+'</b><button id="toggle">'+(collapsed?'열기':'접기')+'</button></div>'+
-    (collapsed?'':'<div class="body"><select id="user">'+USERS.map(u=>'<option '+(u===selected?'selected':'')+'>'+u+'</option>').join('')+'</select><button id="fleet">전체 차고 갱신</button><button id="resetGarage">차고 테스트 초기화</button><button id="garage">차고 저장</button><button id="trades">거래 수집</button><button id="diagnose">진단</button><button id="export">JSON</button><label class="info"><input id="auto" type="checkbox" '+(db.settings.auto?'checked':'')+'> 60초 자동 검사 (열린 화면, 팝업 자동 스크롤)</label><small class="info">'+escapeHtml(message)+'</small><h4>'+escapeHtml(selected)+' · '+(g?.vehicles.length||0)+'종 / '+total+'대</h4><table>'+rows+'</table><small class="info">최신 확인: '+escapeHtml(g?.updatedAt||'없음')+'</small><small class="info">강화 성공·실패는 차고 변화로 추정하며 확정하지 않습니다.</small></div>')+'</div>';
+    (collapsed?'':'<div class="body"><select id="user">'+USERS.map(u=>'<option '+(u===selected?'selected':'')+'>'+u+'</option>').join('')+'</select><button id="fleet">전체 차고 갱신</button><small class="info">'+escapeHtml(message)+'</small><h4>'+escapeHtml(selected)+' · '+(g?.vehicles.length||0)+'종 / '+total+'대</h4><table>'+rows+'</table><small class="info">최신 확인: '+escapeHtml(g?.updatedAt||'없음')+'</small></div>')+'</div>';
     shadow.getElementById('toggle').onclick = () => {collapsed=!collapsed;render();};
     if (collapsed) return;
     shadow.getElementById('user').onchange = e => {selected=e.target.value;render();};
     shadow.getElementById('fleet').onclick = refreshAllGarages;
-    shadow.getElementById('resetGarage').onclick = resetGarageTest;
-    shadow.getElementById('garage').onclick = () => captureGarage();
-    shadow.getElementById('trades').onclick = () => captureTrades();
-    const diagnosticButton=shadow.getElementById('diagnose');
-    if (diagnosticButton) diagnosticButton.onclick = showDiagnostics;
-    shadow.getElementById('export').onclick = exportJson;
-    shadow.getElementById('auto').onchange = e => {db.settings.auto=e.target.checked;save();};
+
   }
   function relocateOverlay() {
     // Ordinary CSS modals are not in the browser top layer: mount on body.
