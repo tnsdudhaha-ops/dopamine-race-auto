@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.37 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.38 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.37';
+  const VERSION = '1.1.38';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -281,26 +281,80 @@
     if(!btn)return false;
     btn.click();return true;
   }
-  function downloadAiGarageJson() {
+  const GH_TOKEN_KEY='dopamine-fleet-github-token-v1';
+  const GH_FILE_API='https://api.github.com/repos/tnsdudhaha-ops/dopamine-race-auto/contents/data/latest-garages.json';
+  function aiGaragePayload(){
     const generatedAt=date();
-    const participants=USERS.map(user=>{
-      const g=db.garages[user];
-      const vehicles=(g?.vehicles||[]).map(v=>({
-        grade:v.grade,model:v.model,maxStars:Number(v.stars),
-        quantity:Number(v.qty),starBreakdown:Array.isArray(v.breakdown)?v.breakdown:[]
-      }));
-      return {user,updatedAt:g?.updatedAt||null,modelCount:vehicles.length,
-        vehicleCount:vehicles.reduce((n,v)=>n+v.quantity,0),vehicles};
-    });
-    const payload={schema:'dopamine-race-garages-ai-v1',generatedAt,
-      source:'도파민레이스 차량 추적기',trackerVersion:VERSION,participants};
+    return {schema:'dopamine-race-garages-ai-v1',generatedAt,
+      source:'도파민레이스 차량 추적기',trackerVersion:VERSION,
+      participants:USERS.map(user=>{
+        const g=db.garages[user];
+        const vehicles=(g?.vehicles||[]).map(v=>({
+          grade:v.grade,model:v.model,maxStars:Number(v.stars),
+          quantity:Number(v.qty),starBreakdown:Array.isArray(v.breakdown)?v.breakdown:[]
+        }));
+        return {user,updatedAt:g?.updatedAt||null,modelCount:vehicles.length,
+          vehicleCount:vehicles.reduce((n,v)=>n+v.quantity,0),vehicles};
+      })};
+  }
+  function base64Utf8(s){
+    const bytes=new TextEncoder().encode(s);
+    let binary='';
+    for(let i=0;i<bytes.length;i+=8192)
+      binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+    return btoa(binary);
+  }
+  function downloadAiGarageJson(payload){
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
     const url=URL.createObjectURL(blob);
     const link=document.createElement('a');
-    link.href=url;link.download='dopamine-race-garages-'+generatedAt.replace(/[:.]/g,'-')+'.json';
+    link.href=url;link.download='dopamine-race-garages-'+payload.generatedAt.replace(/[:.]/g,'-')+'.json';
     document.body.appendChild(link);
     try{link.click();}finally{link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
     return link.download;
+  }
+  async function uploadAiGarageJson(payload,token){
+    const headers={'Accept':'application/vnd.github+json','Authorization':'Bearer '+token,
+      'X-GitHub-Api-Version':'2022-11-28'};
+    const current=await fetch(GH_FILE_API,{headers,cache:'no-store'});
+    if(current.status!==200&&current.status!==404)
+      throw new Error('기존 파일 조회 HTTP '+current.status+(current.status===401?' (토큰 인증 실패)':''));
+    const sha=current.status===200?(await current.json()).sha:null;
+    const body={message:'Update latest garages '+payload.generatedAt,
+      content:base64Utf8(JSON.stringify(payload,null,2)),branch:'main'};
+    if(sha)body.sha=sha;
+    const response=await fetch(GH_FILE_API,{method:'PUT',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!response.ok){
+      const detail=await response.json().catch(()=>({}));
+      throw new Error('업로드 HTTP '+response.status+(detail.message?' · '+detail.message:''));
+    }
+    return true;
+  }
+  async function publishAiGarageJson(){
+    const payload=aiGaragePayload();
+    let token=localStorage.getItem(GH_TOKEN_KEY)||'';
+    if(!token){
+      const entered=window.prompt('GitHub Fine-grained PAT를 입력하세요 (저장소 Contents 읽기/쓰기 권한). 토큰은 이 브라우저에만 저장되며 GitHub 코드/JSON에는 포함되지 않습니다.');
+      if(!entered){
+        downloadAiGarageJson(payload);
+        note('GitHub 토큰 미등록 · JSON 파일로 대신 저장했습니다. 다음 갱신 때 다시 입력할 수 있습니다.');
+        return;
+      }
+      token=entered.trim();
+      if(!token){note('토큰이 비어 있어 업로드하지 않았습니다.');return;}
+      localStorage.setItem(GH_TOKEN_KEY,token);
+    }
+    note('6/6명 수집 완료 · GitHub 업로드 중…');
+    try{
+      await uploadAiGarageJson(payload,token);
+      note('GitHub 자동 업로드 성공 · data/latest-garages.json · 이제 ChatGPT에 "차고 갱신했어"라고 말씀하세요.');
+    }catch(e){
+      downloadAiGarageJson(payload);
+      if(/401|403/.test(String(e.message||e))){
+        localStorage.removeItem(GH_TOKEN_KEY);
+        note('GitHub 인증/권한 오류: '+String(e.message||e)+' · 토큰 저장을 해제했습니다. JSON은 백업 다운로드했습니다.');
+      }else note('GitHub 업로드 실패: '+String(e.message||e)+' · JSON은 백업 다운로드했습니다.');
+    }
   }
   async function refreshAllGarages() {
     if(fleetRefreshing||collecting)return;
@@ -332,10 +386,7 @@
         await pause(350);
       }
       if(successes===6){
-        try{
-          const filename=downloadAiGarageJson();
-          note('6/6명 갱신 완료 · AI 분석용 JSON 자동 저장 요청: '+filename+' · 파일을 ChatGPT에 첨부하세요.');
-        }catch(e){note('6/6명 갱신 완료 · JSON 저장 실패: '+String(e.message||e));}
+        await publishAiGarageJson();
       }else{
         note('전체 차고 갱신: '+successes+'/6명 성공 · JSON 자동 생성 보류. '+results.join(' / '));
       }
