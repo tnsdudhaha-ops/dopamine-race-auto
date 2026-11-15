@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.13 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.14 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.13';
+  const VERSION = '1.1.14';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -250,14 +250,25 @@
     shadow.getElementById('auto').onchange = e => {db.settings.auto=e.target.checked;save();};
   }
   function relocateOverlay() {
-    const candidates = panels();
-    const garage = activeGaragePanel();
-    const trade = candidates.find(e => /(?:거래|장터)/.test(e.innerText || ''));
-    const target = garage || trade || null;
-    // Dialogs promoted to the browser top layer cover even max-z-index body elements.
-    // Put the tracker directly inside the visible dialog so it shares that layer.
-    const parent = target || document.body;
-    if (root.parentElement !== parent) parent.appendChild(root);
+    // Never mount the toolbar inside the scrollable vehicle grid.
+    // Keep it on the outermost visible dialog so the fixed controls remain visible.
+    const dialogs=[...document.querySelectorAll('[role="dialog"],[aria-modal="true"],dialog[open]')]
+      .filter(el=>el!==root&&!root.contains(el)&&el.getClientRects().length);
+    const garage=activeGaragePanel();
+    let target=null;
+    if(garage) {
+      target=dialogs.find(d=>d===garage||d.contains(garage))||null;
+      if(!target) {
+        const matches=panels().filter(e=>e===garage||e.contains(garage));
+        target=matches.sort((a,b)=>(b.getBoundingClientRect().width*b.getBoundingClientRect().height)-(a.getBoundingClientRect().width*a.getBoundingClientRect().height))[0]||null;
+      }
+    }
+    if(!target) {
+      const trade=dialogs.find(d=>/거래|장터/.test(d.textContent||''));
+      target=trade||null;
+    }
+    const parent=target||document.body;
+    if(root.parentElement!==parent) parent.appendChild(root);
   }
   function init() {
     document.body.appendChild(root);
