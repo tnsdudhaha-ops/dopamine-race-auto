@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.27 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.28 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.27';
+  const VERSION = '1.1.28';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -256,13 +256,18 @@
   }
   function tradeRows(container) {
     const rows=[];
-    const isEntry=t=>/(?:\d{2}\.\d{2}\.\d{2}\.?\s*\d{2}:\d{2})/.test(t)&&
-      /(차량출고|거래 완료|매입|출고|성사)/.test(t);
-    for(const el of container.querySelectorAll('div,li,article,section')) {
-      if(el===root||root.contains(el)) continue;
+    const hasTime=t=>/\d{2}\.\d{2}\.\d{2}\.?\s*\d{2}:\d{2}/.test(t);
+    const hasKind=t=>/차량출고|거래 완료|매입|출고|성사/.test(t);
+    const hasDetail=t=>/★\s*[1-5]|⚡\s*\d+|→/.test(t);
+    const elements=[...container.querySelectorAll('div,li,article,section')].filter(el=>el!==root&&!root.contains(el));
+    for(const el of elements){
       const t=(el.innerText||'').trim();
-      if(t.length<20||t.length>850||!isEntry(t)) continue;
-      if([...el.children].some(ch=>isEntry((ch.innerText||'').trim())&&(ch.innerText||'').length>=20)) continue;
+      if(t.length<20||t.length>1000||!hasTime(t)||!hasKind(t)||!hasDetail(t))continue;
+      // Keep the smallest complete card, not a heading-only child with a timestamp.
+      if([...el.children].some(ch=>{
+        const ct=(ch.innerText||'').trim();
+        return hasTime(ct)&&hasKind(ct)&&hasDetail(ct)&&ct.length>=20;
+      }))continue;
       rows.push(t);
     }
     return [...new Set(rows)];
