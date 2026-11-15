@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.6 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.7 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.6';
+  const VERSION = '1.1.7';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
