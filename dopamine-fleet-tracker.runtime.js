@@ -1,4 +1,4 @@
-// Dopamine Vehicle Analyzer Release 1.0 (loaded by existing bootstrap)
+// Dopamine Fleet Tracker runtime — Vehicle Analyzer Release 1.0 (bootstrap compatibility marker)
 (function () {
   'use strict';
   const VERSION = '1.0';
