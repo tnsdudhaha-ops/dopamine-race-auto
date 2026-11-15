@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.14 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.15 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.14';
+  const VERSION = '1.1.15';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -250,25 +250,19 @@
     shadow.getElementById('auto').onchange = e => {db.settings.auto=e.target.checked;save();};
   }
   function relocateOverlay() {
-    // Never mount the toolbar inside the scrollable vehicle grid.
-    // Keep it on the outermost visible dialog so the fixed controls remain visible.
-    const dialogs=[...document.querySelectorAll('[role="dialog"],[aria-modal="true"],dialog[open]')]
-      .filter(el=>el!==root&&!root.contains(el)&&el.getClientRects().length);
-    const garage=activeGaragePanel();
-    let target=null;
-    if(garage) {
-      target=dialogs.find(d=>d===garage||d.contains(garage))||null;
-      if(!target) {
-        const matches=panels().filter(e=>e===garage||e.contains(garage));
-        target=matches.sort((a,b)=>(b.getBoundingClientRect().width*b.getBoundingClientRect().height)-(a.getBoundingClientRect().width*a.getBoundingClientRect().height))[0]||null;
-      }
-    }
-    if(!target) {
-      const trade=dialogs.find(d=>/거래|장터/.test(d.textContent||''));
-      target=trade||null;
-    }
-    const parent=target||document.body;
+    // Ordinary CSS modals are not in the browser top layer: mount on body.
+    // Only native showModal() dialogs require the toolbar inside the dialog.
+    const nativeDialogs=[...document.querySelectorAll('dialog[open]')]
+      .filter(d=>d.getClientRects().length&&d.matches(':modal'));
+    const parent=nativeDialogs[nativeDialogs.length-1]||document.body;
     if(root.parentElement!==parent) parent.appendChild(root);
+    root.style.setProperty('position','fixed','important');
+    root.style.setProperty('right','8px','important');
+    root.style.setProperty('bottom','8px','important');
+    root.style.setProperty('z-index','2147483647','important');
+    root.style.setProperty('visibility','visible','important');
+    root.style.setProperty('opacity','1','important');
+    root.style.setProperty('display','block','important');
   }
   function init() {
     document.body.appendChild(root);
