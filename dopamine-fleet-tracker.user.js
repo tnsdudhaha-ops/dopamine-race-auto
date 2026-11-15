@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민레이스 차량 추적기
 // @namespace    local.dopamine.fleet
-// @version      1.1.2
+// @version      1.1.3
 // @description  독립 차량 추적기: 차고/거래 화면 수집, 변경 이력, JSON 백업
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-fleet-tracker.user.js
@@ -11,7 +11,7 @@
 // ==/UserScript==
 (function () {
   'use strict';
-  const VERSION = '1.1.2';
+  const VERSION = '1.1.3';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -78,26 +78,76 @@
     const y = new Map(b.map(v=>[[v.grade,v.model,v.stars].join('|'),v.qty]));
     return [...new Set([...x.keys(),...y.keys()])].map(k=>({key:k,delta:(y.get(k)||0)-(x.get(k)||0)})).filter(v=>v.delta);
   }
-  function captureGarage(silent=false) {
+  let collecting = false;
+  const pause = ms => new Promise(resolve => setTimeout(resolve,ms));
+  function scrollContainer(p) {
+    const nodes = [p,...p.querySelectorAll('*')];
+    const possible = nodes.filter(el => {
+      const cs = getComputedStyle(el);
+      return el.scrollHeight > el.clientHeight + 12 &&
+        el.clientHeight > 65 && /(auto|scroll)/.test(cs.overflowY);
+    });
+    return possible.sort((a,b) => (b.scrollHeight-b.clientHeight)-(a.scrollHeight-a.clientHeight))[0] || null;
+  }
+  async function captureGarage(silent=false) {
+    if (collecting) return;
     const p = panel();
     const actual = detectOwner(p);
     if (!p) { if (!silent) note('차고 팝업을 찾지 못했습니다.'); return; }
     if (!actual) { if (!silent) note('차고 소유자를 인식하지 못했습니다. 잘못된 참가자에게 저장하지 않습니다.'); return; }
     if (actual !== selected && !silent) { note('현재 차고는 '+actual+'입니다. 참가자 선택을 확인하세요.'); return; }
-    const cars = parseGarage(p);
-    if (!cars.length) { if (!silent) note('차량 카드 0건 인식. 실제 DOM에 맞춘 파서 조정이 필요합니다.'); return; }
-    const prev = db.garages[actual]?.vehicles || [];
-    const changes = differences(prev,cars);
-    if (prev.length && !changes.length) { if (!silent) note(actual+' 차고 변경 없음 ('+cars.length+'종)'); return; }
-    const at = date();
-    db.garages[actual] = {vehicles:cars,updatedAt:at,source:'visible-garage'};
-    db.snapshots.push({user:actual,at,vehicles:cars,changes});
-    if (prev.length && changes.length) db.events.push({user:actual,at,changes,note:'변동 원인 미확정'});
-    db.snapshots = db.snapshots.slice(-800);
-    db.events = db.events.slice(-800);
-    save();
-    selected = actual;
-    note(actual+' 차고 '+cars.length+'종 저장, 변경 '+changes.length+'건');
+    collecting = true;
+    const scroll = scrollContainer(p);
+    const oldTop = scroll ? scroll.scrollTop : 0;
+    const seen = new Map();
+    const collect = () => {
+      for (const v of parseGarage(p)) seen.set([v.grade,v.model,v.stars].join('|'),v);
+    };
+    let complete = !scroll;
+    try {
+      if (!silent) note(actual+' 차고 전체 차량 수집 중…');
+      collect();
+      if (scroll) {
+        scroll.scrollTop = 0;
+        await pause(180);
+        collect();
+        let stable = 0;
+        for (let i=0;i<160;i++) {
+          if (!p.isConnected || !scroll.isConnected) break;
+          const before = scroll.scrollTop;
+          const step = Math.max(100,Math.floor(scroll.clientHeight*0.75));
+          scroll.scrollTop = Math.min(scroll.scrollHeight, before+step);
+          await pause(120);
+          collect();
+          if (scroll.scrollTop === before) stable++;
+          else stable=0;
+          if (stable >= 2 && scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight-5) {complete=true;break;}
+        }
+      }
+      const cars = [...seen.values()];
+      if (!complete || !p.isConnected) {
+        if (!silent) note('스크롤 끝까지 확인하지 못해 저장하지 않았습니다. 수집 '+cars.length+'종');
+        return;
+      }
+      if (!cars.length) {if (!silent) note('차량 카드 0건 인식. 화면 구조 확인이 필요합니다.');return;}
+      const prev = db.garages[actual]?.vehicles || [];
+      const changes = differences(prev,cars);
+      if (prev.length && !changes.length) {if (!silent) note(actual+' 차고 변경 없음 ('+cars.length+'종)');return;}
+      const at = date();
+      db.garages[actual] = {vehicles:cars,updatedAt:at,source:'full-popup-scroll'};
+      db.snapshots.push({user:actual,at,vehicles:cars,changes});
+      if (prev.length && changes.length) db.events.push({user:actual,at,changes,note:'변동 원인 미확정'});
+      db.snapshots = db.snapshots.slice(-800);
+      db.events = db.events.slice(-800);
+      save();
+      selected = actual;
+      if (!silent) note(actual+' 전체 스크롤 수집 '+cars.length+'종 저장, 변경 '+changes.length+'건');
+    } catch(e) {
+      if (!silent) note('차고 수집 오류: '+String(e.message || e));
+    } finally {
+      if (scroll && scroll.isConnected) scroll.scrollTop = oldTop;
+      collecting = false;
+    }
   }
   function captureTrades(silent=false) {
     const p = panel();
@@ -134,7 +184,7 @@
     const rows = (g?.vehicles || []).map(v => '<tr><td>'+escapeHtml(v.grade)+'</td><td>'+escapeHtml(v.model)+'</td><td>★'+v.stars+'</td><td>'+v.qty+'</td></tr>').join('');
     shadow.innerHTML = '<style>:host{all:initial}*{box-sizing:border-box}.wrap{font:13px system-ui,sans-serif;color:#f4f6fa;background:#172334;border:1px solid #9ba7b8;border-radius:12px;box-shadow:0 5px 30px #0009;max-height:70dvh;overflow:auto}.top{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#29405b}button,select{background:#395471;color:#fff;border:1px solid #9aafc4;border-radius:6px;padding:7px;cursor:pointer;margin:2px}.body{padding:8px}.info{display:block;color:#d7e0ee;margin:6px 0;overflow-wrap:anywhere}table{width:100%;font-size:12px;border-collapse:collapse}td{border-bottom:1px solid #53657c;padding:4px}h4{margin:8px 0 3px}</style>'+
     '<div class="wrap"><div class="top"><b>🚗 차량 추적기 v'+VERSION+'</b><button id="toggle">'+(collapsed?'열기':'접기')+'</button></div>'+
-    (collapsed?'':'<div class="body"><select id="user">'+USERS.map(u=>'<option '+(u===selected?'selected':'')+'>'+u+'</option>').join('')+'</select><button id="garage">차고 저장</button><button id="trades">거래 수집</button><button id="export">JSON</button><label class="info"><input id="auto" type="checkbox" '+(db.settings.auto?'checked':'')+'> 60초 자동 검사 (열린 화면)</label><small class="info">'+escapeHtml(message)+'</small><h4>'+escapeHtml(selected)+' · '+(g?.vehicles.length||0)+'종</h4><table>'+rows+'</table><small class="info">최신 확인: '+escapeHtml(g?.updatedAt||'없음')+'</small><small class="info">강화 성공·실패는 차고 변화로 추정하며 확정하지 않습니다.</small></div>')+'</div>';
+    (collapsed?'':'<div class="body"><select id="user">'+USERS.map(u=>'<option '+(u===selected?'selected':'')+'>'+u+'</option>').join('')+'</select><button id="garage">차고 저장</button><button id="trades">거래 수집</button><button id="export">JSON</button><label class="info"><input id="auto" type="checkbox" '+(db.settings.auto?'checked':'')+'> 60초 자동 검사 (열린 화면, 팝업 자동 스크롤)</label><small class="info">'+escapeHtml(message)+'</small><h4>'+escapeHtml(selected)+' · '+(g?.vehicles.length||0)+'종</h4><table>'+rows+'</table><small class="info">최신 확인: '+escapeHtml(g?.updatedAt||'없음')+'</small><small class="info">강화 성공·실패는 차고 변화로 추정하며 확정하지 않습니다.</small></div>')+'</div>';
     shadow.getElementById('toggle').onclick = () => {collapsed=!collapsed;render();};
     if (collapsed) return;
     shadow.getElementById('user').onchange = e => {selected=e.target.value;render();};
