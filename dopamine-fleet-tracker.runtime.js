@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.32 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.33 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.32';
+  const VERSION = '1.1.33';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -172,10 +172,10 @@
     });
     return possible.sort((a,b) => (b.scrollHeight-b.clientHeight)-(a.scrollHeight-a.clientHeight))[0] || null;
   }
-  async function captureGarage(silent=false) {
+  async function captureGarage(silent=false, ownerOverride=null) {
     if (collecting) return;
     const p = activeGaragePanel();
-    const actual = currentGarageOwner();
+    const actual = ownerOverride || currentGarageOwner();
     if (!p) { if (!silent) note('차고 팝업을 찾지 못했습니다.'); return; }
     if (!actual) { if (!silent) note('현재 차고 소유주를 확인하지 못했습니다. 이전 선택값으로 저장하지 않습니다.'); return; }
     if (actual !== selected) { selected=actual; render(); }
@@ -218,7 +218,7 @@
       if (expected!==null && total!==expected) {if (!silent) note('수량 불일치: 게임 '+expected+'대 / 추적 '+total+'대. 기존 기록 보호를 위해 저장하지 않았습니다.');return;}
       const prev = db.garages[actual]?.vehicles || [];
       const changes = differences(prev,cars);
-      if (prev.length && !changes.length) {if (!silent) note(actual+' 차고 변경 없음 ('+cars.length+'종 / '+total+'대)');return;}
+      if (prev.length && !changes.length) {if (!silent) note(actual+' 차고 변경 없음 ('+cars.length+'종 / '+total+'대)');return true;}
       const at = date();
       db.garages[actual] = {vehicles:cars,updatedAt:at,source:'full-popup-scroll'};
       db.snapshots.push({user:actual,at,vehicles:cars,changes});
@@ -228,12 +228,72 @@
       save();
       selected = actual;
       if (!silent) note(actual+' 전체 수집 '+cars.length+'종 / '+total+'대 저장, 변경 '+changes.length+'건');
+      return true;
     } catch(e) {
       if (!silent) note('차고 수집 오류: '+String(e.message || e));
     } finally {
       if (scroll && scroll.isConnected) scroll.scrollTop = oldTop;
       collecting = false;
     }
+  }
+  let fleetRefreshing=false;
+  function participantRows() {
+    const buttons=[...document.querySelectorAll('button')].filter(b=>b.getClientRects().length&&clean(b.textContent)==='차고 구경');
+    return buttons.map(button=>{
+      let row=button;
+      for(let n=0;n<7&&row.parentElement;n++){
+        row=row.parentElement;
+        const text=clean(row.innerText||row.textContent);
+        if(text.includes('차고 구경')&&text.length<180&&/그레이트|픸홀|픽홀|참돔|킹황|갱서|ㅇ발|○발|◯발|〇발/.test(text))break;
+      }
+      const text=clean(row.innerText||row.textContent);
+      const name=Object.keys(ALIASES).concat(USERS).sort((a,b)=>b.length-a.length).find(n=>text.includes(n));
+      return {button,owner:name?who(name):null};
+    });
+  }
+  async function waitForGarage(owner,timeout=6000) {
+    const start=Date.now();
+    while(Date.now()-start<timeout){
+      const p=activeGaragePanel();
+      if(p&&p.getClientRects().length&&(currentGarageOwner()===owner||/보유\s*차량/.test(p.innerText||'')))return p;
+      await pause(150);
+    }
+    return null;
+  }
+  function closeGarage(p) {
+    if(!p)return false;
+    const buttons=[...p.querySelectorAll('button')];
+    const btn=buttons.find(b=>/닫기/.test(clean(b.innerText||b.textContent))||b.getAttribute('aria-label')==='Close');
+    if(!btn)return false;
+    btn.click();return true;
+  }
+  async function refreshAllGarages() {
+    if(fleetRefreshing||collecting)return;
+    const initial=participantRows();
+    if(initial.length!==6||initial.some(x=>!x.owner)||new Set(initial.map(x=>x.owner)).size!==6){
+      note('참가자 현황에서 6명 모두 확인되지 않습니다. 상점 → 참가자 현황을 열어주세요.');
+      return;
+    }
+    fleetRefreshing=true;
+    const results=[];
+    try{
+      for(let i=0;i<initial.length;i++){
+        const {owner}=initial[i];
+        note('전체 차고 갱신 '+(i+1)+'/6: '+owner+' 차고 여는 중');
+        const row=participantRows().find(x=>x.owner===owner);
+        if(!row||!row.button.isConnected){results.push(owner+' 행 없음');continue;}
+        row.button.click();
+        const p=await waitForGarage(owner);
+        if(!p){results.push(owner+' 열기 실패');continue;}
+        await pause(250);
+        const ok=await captureGarage(true,owner);
+        results.push(owner+(ok?' 완료':' 저장 실패'));
+        if(!closeGarage(p)){note(owner+' 차고 닫기 실패. 자동 갱신 중단');break;}
+        await pause(350);
+      }
+      note('전체 차고 갱신 종료: '+results.join(' / '));
+    }catch(e){note('전체 갱신 오류: '+String(e.message||e));}
+    finally{fleetRefreshing=false;}
   }
   function tradeScreen() {
     const titles=['전체 공지','유저장터 거래현황 전체보기','딜러 매입 현황 전체보기'];
@@ -417,10 +477,11 @@
     root.style.setProperty('width',collapsed?'190px':'min(370px, calc(100vw - 24px))','important');
     shadow.innerHTML = '<style>:host{all:initial}*{box-sizing:border-box}.wrap{font:13px system-ui,sans-serif;color:#f4f6fa;background:#172334;border:1px solid #9ba7b8;border-radius:12px;box-shadow:0 5px 30px #0009;max-height:70dvh;overflow:auto}.top{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#29405b}button,select{background:#395471;color:#fff;border:1px solid #9aafc4;border-radius:6px;padding:7px;cursor:pointer;margin:2px}.body{padding:8px}.info{display:block;color:#d7e0ee;margin:6px 0;overflow-wrap:anywhere}table{width:100%;font-size:12px;border-collapse:collapse}td{border-bottom:1px solid #53657c;padding:4px}h4{margin:8px 0 3px}</style>'+
     '<div class="wrap"><div class="top"><b>🚗 차량 추적기 v'+VERSION+'</b><button id="toggle">'+(collapsed?'열기':'접기')+'</button></div>'+
-    (collapsed?'':'<div class="body"><select id="user">'+USERS.map(u=>'<option '+(u===selected?'selected':'')+'>'+u+'</option>').join('')+'</select><button id="garage">차고 저장</button><button id="trades">거래 수집</button><button id="diagnose">진단</button><button id="export">JSON</button><label class="info"><input id="auto" type="checkbox" '+(db.settings.auto?'checked':'')+'> 60초 자동 검사 (열린 화면, 팝업 자동 스크롤)</label><small class="info">'+escapeHtml(message)+'</small><h4>'+escapeHtml(selected)+' · '+(g?.vehicles.length||0)+'종 / '+total+'대</h4><table>'+rows+'</table><small class="info">최신 확인: '+escapeHtml(g?.updatedAt||'없음')+'</small><small class="info">강화 성공·실패는 차고 변화로 추정하며 확정하지 않습니다.</small></div>')+'</div>';
+    (collapsed?'':'<div class="body"><select id="user">'+USERS.map(u=>'<option '+(u===selected?'selected':'')+'>'+u+'</option>').join('')+'</select><button id="fleet">전체 차고 갱신</button><button id="garage">차고 저장</button><button id="trades">거래 수집</button><button id="diagnose">진단</button><button id="export">JSON</button><label class="info"><input id="auto" type="checkbox" '+(db.settings.auto?'checked':'')+'> 60초 자동 검사 (열린 화면, 팝업 자동 스크롤)</label><small class="info">'+escapeHtml(message)+'</small><h4>'+escapeHtml(selected)+' · '+(g?.vehicles.length||0)+'종 / '+total+'대</h4><table>'+rows+'</table><small class="info">최신 확인: '+escapeHtml(g?.updatedAt||'없음')+'</small><small class="info">강화 성공·실패는 차고 변화로 추정하며 확정하지 않습니다.</small></div>')+'</div>';
     shadow.getElementById('toggle').onclick = () => {collapsed=!collapsed;render();};
     if (collapsed) return;
     shadow.getElementById('user').onchange = e => {selected=e.target.value;render();};
+    shadow.getElementById('fleet').onclick = refreshAllGarages;
     shadow.getElementById('garage').onclick = () => captureGarage();
     shadow.getElementById('trades').onclick = () => captureTrades();
     const diagnosticButton=shadow.getElementById('diagnose');
@@ -455,7 +516,7 @@
     render();
     setInterval(()=>{relocateOverlay();const u=currentGarageOwner();if(u&&u!==selected){selected=u;message=u+' 차고 인식됨';render();}},1200);
     setInterval(()=>{
-      if (!db.settings.auto) return;
+      if (!db.settings.auto||fleetRefreshing) return;
       const p=activeGaragePanel(),u=currentGarageOwner();
       if (u) {selected=u;render();captureGarage(true);}
       else captureTrades(true);
