@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.16 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.17 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.16';
+  const VERSION = '1.1.17';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -41,15 +41,23 @@
     return null;
   }
   function currentGarageOwner() {
-    const titles=[...document.querySelectorAll('h1,h2,h3,h4,header,[class*="title"],[class*="Title"],[class*="header"],[class*="Header"]')]
-      .filter(el=>el.getClientRects().length);
-    for(const el of titles) {
+    // Match the smallest visible text node containing an actual garage heading.
+    // Titles may be plain div/span elements, not h1-h4.
+    const candidates=[];
+    const nodes=document.querySelectorAll('h1,h2,h3,h4,h5,header,div,span,strong,b,p');
+    for(const el of nodes) {
+      if(el===root||root.contains(el)||!el.getClientRects().length) continue;
       const t=(el.textContent||'').trim();
-      if(t.length>120) continue;
+      if(t.length<3||t.length>100) continue;
       const owner=garageOwnerFromText(t);
-      if(owner) return owner;
+      if(!owner) continue;
+      const r=el.getBoundingClientRect();
+      if(r.width<1||r.height<1||r.bottom<0||r.top>innerHeight) continue;
+      // Prefer headings near the top of the visible garage dialog.
+      candidates.push({owner,top:r.top,len:t.length});
     }
-    return null;
+    candidates.sort((a,b)=>a.len-b.len||a.top-b.top);
+    return candidates[0]?.owner||null;
   }
   function activeGaragePanel() {
     const visible=el=>!!(el&&el.getClientRects().length);
@@ -79,7 +87,7 @@
   }
   function detectOwner(p) {
     if(!p) return null;
-    return garageOwnerFromText(p.textContent)||garageOwnerFromText(p.innerText);
+    return currentGarageOwner()||garageOwnerFromText(p.textContent)||garageOwnerFromText(p.innerText);
   }
   function expectedTotal(p) {
     const m=(p?.innerText||'').match(/보유차량\s*[·•:]?\s*(\d+)\s*대/);
@@ -152,7 +160,7 @@
     const p = activeGaragePanel();
     const actual = currentGarageOwner() || detectOwner(p);
     if (!p) { if (!silent) note('차고 팝업을 찾지 못했습니다.'); return; }
-    if (!actual) { if (!silent) note('차고 소유주 미인식: 차고 제목이 보이게 캡처해 주세요. 다른 참가자 기록은 보호합니다.'); return; }
+    if (!actual) { if (!silent) note('차고 소유주 미인식: 현재 차고를 확인할 수 없어 저장하지 않습니다.'); return; }
     if (actual !== selected) { selected=actual; render(); }
     collecting = true;
     const scroll = scrollContainer(p);
@@ -285,7 +293,7 @@
     root.style.setProperty('z-index','2147483647','important');
     root.style.setProperty('display','block','important');
     render();
-    setInterval(()=>{relocateOverlay();const u=currentGarageOwner();if(u&&u!==selected){selected=u;message=u+' 차고 인식됨';render();}},500);
+    setInterval(()=>{relocateOverlay();const u=currentGarageOwner();if(u&&u!==selected){selected=u;message=u+' 차고 인식됨';render();}},1200);
     setInterval(()=>{
       if (!db.settings.auto) return;
       const p=activeGaragePanel(),u=currentGarageOwner()||detectOwner(p);
