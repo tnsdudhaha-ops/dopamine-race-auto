@@ -1,8 +1,8 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-15T06:29:28.100Z",
+  "generatedAt": "2026-11-15T06:34:51.545Z",
   "source": "도파민레이스 차량 추적기",
-  "trackerVersion": "1.1.38",
+  "trackerVersion": "1.0",
   "participants": [
     {
       "user": "ㅇ발",
