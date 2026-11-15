@@ -1,10 +1,10 @@
-// Dopamine Fleet Tracker runtime v1.1.18 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.19 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.18';
+  const VERSION = '1.1.19';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
-  const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
+  const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
   if (document.getElementById('dft-root')) return;
   let db;
   try { db = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (_) { db = {}; }
@@ -162,7 +162,7 @@
     const p = activeGaragePanel();
     const actual = currentGarageOwner();
     if (!p) { if (!silent) note('차고 팝업을 찾지 못했습니다.'); return; }
-    if (!actual) { if (!silent) note('차고 소유주 미인식: 현재 차고를 확인할 수 없어 저장하지 않습니다.'); return; }
+    if (!actual) { if (!silent) note('현재 차고 소유주를 확인하지 못했습니다. 이전 선택값으로 저장하지 않습니다.'); return; }
     if (actual !== selected) { selected=actual; render(); }
     collecting = true;
     const scroll = scrollContainer(p);
