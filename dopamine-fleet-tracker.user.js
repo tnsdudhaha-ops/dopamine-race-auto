@@ -1,37 +1,164 @@
 // ==UserScript==
 // @name         도파민레이스 차량 추적기
 // @namespace    local.dopamine.fleet
-// @version      1.1.1
-// @description  AUTO와 독립: 표시된 차고/장터 기록 추적, 변경 이력 및 JSON 백업
+// @version      1.1.2
+// @description  독립 차량 추적기: 차고/거래 화면 수집, 변경 이력, JSON 백업
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-fleet-tracker.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-fleet-tracker.user.js
 // @grant        none
 // @run-at       document-idle
 // ==/UserScript==
-(()=>{
-'use strict';
-const VERSION='1.1.1',KEY='dopamine-fleet-tracker-v1',USERS=['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
-const ALIAS={'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
-if(window.__dopamineFleetTracker) return;
-window.__dopamineFleetTracker=true;
-let db;try{db=JSON.parse(localStorage.getItem(KEY)||'{}')}catch{db={}}
-db={version:1,garages:{},snapshots:[],transactions:[],events:[],seen:[],settings:{auto:true,interval:60},...db};
-let selected='ㅇ발',message='현재 표시된 차고에서 참가자를 확인한 뒤 저장하세요.',lastFingerprint='';
-const $=s=>document.querySelector(s),norm=s=>String(s||'').replace(/\s+/g,' ').trim(),owner=s=>ALIAS[norm(s)]||norm(s),stamp=()=>new Date().toISOString(),save=()=>localStorage.setItem(KEY,JSON.stringify(db));
-function esc(s){return String(s??'').replace(/[&<>"']/g,c=>c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':c==='"'?'&quot;':'&#39;');}
-function candidates(){return [...document.querySelectorAll('[role="dialog"],[aria-modal="true"],[class*="modal"],[class*="Modal"]')].filter(e=>e.getClientRects().length&&!e.closest('#dft-root'));}
-function activePanel(){let c=candidates();return c.sort((a,b)=>a.innerText.length-b.innerText.length)[0]||null;}
-function detectOwner(panel){let t=norm(panel?.innerText||'').slice(0,160);for(let u of USERS){if(t.includes(u+'의 차고')||t.includes(u+' 차고'))return u;}for(let [name,u] of Object.entries(ALIAS)){if(t.includes(name+'의 차고')||t.includes(name+' 차고'))return u;}return null;}
-function parseCard(el){let t=el.innerText||'',g=t.match(/(?:^|\n|\s)(SSR|SR|S|R)(?=\s|\n)/),st=t.match(/최고\s*★\s*([1-5])\s*[·•]\s*(\d+)\s*대/);if(!g||!st)return null;let lines=t.split(/\n/).map(norm).filter(Boolean);let ix=lines.findIndex(x=>/최고\s*★/.test(x));let model=ix>=1?lines[ix-1]:'';let brand=ix>=2?lines[ix-2]:'';if(!model||model.length>50)return null;return {grade:g[1],model:norm((brand&&brand!==g[1]?brand+' ':'')+model),stars:+st[1],qty:+st[2]};}
-function parseGarage(panel){if(!panel||!/(차고|보유차량)/.test(panel.innerText))return [];let found=[];for(let el of panel.querySelectorAll('div,li,article,button')){if(el.closest('#dft-root'))continue;let t=el.innerText||'';if(t.length<8||t.length>190||!t.includes('최고 ★'))continue;let v=parseCard(el);if(!v)continue;let childHas=Array.from(el.children).some(ch=>(ch.innerText||'').includes('최고 ★')&&parseCard(ch));if(!childHas)found.push(v);}let out=new Map();for(let v of found){let k=[v.grade,v.model,v.stars].join('|');out.set(k,v);}return [...out.values()];}
-function diff(a,b){let x=new Map(a.map(v=>[[v.grade,v.model,v.stars].join('|'),v.qty])),y=new Map(b.map(v=>[[v.grade,v.model,v.stars].join('|'),v.qty]));return [...new Set([...x.keys(),...y.keys()])].map(k=>({key:k,delta:(y.get(k)||0)-(x.get(k)||0)})).filter(v=>v.delta);}
-function recordGarage(user,automatic=false){let p=activePanel(),actual=detectOwner(p);if(!p||!actual){if(!automatic)note('차고 제목을 확인하지 못했습니다. 참가자 차고 팝업을 열어 주세요.');return;}if(user!==actual){if(!automatic)note('선택한 '+user+'과 실제 차고 '+actual+'가 달라 저장하지 않았습니다.');return;}let vehicles=parseGarage(p);if(!vehicles.length){if(!automatic)note('차량 카드를 인식하지 못했습니다. DOM 구조 확인이 필요합니다.');return;}let prev=db.garages[user]?.vehicles||[],changes=diff(prev,vehicles),at=stamp();if(!changes.length&&prev.length)return;db.garages[user]={vehicles,updatedAt:at,source:'visible-garage'};db.snapshots.push({user,at,vehicles,changes});if(prev.length&&changes.length)db.events.push({user,at,changes,note:'변동 원인 미확정: 거래·구매·강화·매각 가능'});db.snapshots=db.snapshots.slice(-1000);db.events=db.events.slice(-1000);save();note(user+' 차고 '+vehicles.length+'종 저장, 변경 '+changes.length+'건');render();}
-function parseTrades(panel){if(!panel||!/(거래|장터)/.test(panel.innerText))return [];let rows=[...panel.querySelectorAll('tr,li,[class*="history"],[class*="trade"]')];let result=[];for(let row of rows){let t=norm(row.innerText);if(t.length<12||t.length>350)continue;let parties=t.match(/(그레이트|픽홀|참돔|킹황|갱서|ㅇ발|구레긔|피콜로|ㅇ샘|영감|톩끼)\s*(?:→|->)\s*(그레이트|픽홀|참돔|킹황|갱서|ㅇ발|구레긔|피콜로|ㅇ샘|영감|톩끼)/);let grade=t.match(/\b(SSR|SR|S|R)\b/),stars=t.match(/★\s*([1-5])/,price=t.match(/([\d,]+)\s*E\b/i);if(!parties||!grade||!price)continue;let key=t.replace(/\s+/g,'');result.push({key,seller:owner(parties[1]),buyer:owner(parties[2]),grade:grade[1],stars:stars?+stars[1]:null,price:+price[1].replace(/,/g,''),raw:t,observedAt:stamp(),barter:price[1]==='1'});}return result;}
-function recordTrades(automatic=false){let p=activePanel(),ts=parseTrades(p);if(!ts.length){if(!automatic)note('거래 기록을 인식하지 못했습니다. 화면 구조 확인이 필요합니다.');return;}let seen=new Set(db.seen),added=ts.filter(t=>!seen.has(t.key));for(let t of added){db.transactions.push(t);db.seen.push(t.key);}db.transactions=db.transactions.slice(-2000);db.seen=db.seen.slice(-3000);save();if(added.length||!automatic){note('거래 '+ts.length+'건 인식 / 신규 '+added.length+'건 (1E 거래는 맞교환 후보)');render();}}
-function note(s){message=s;let el=$('#dft-note');if(el)el.textContent=s;}
-function exportData(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='dopamine-fleet-'+stamp().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);}
-function render(){let root=$('#dft-root');if(!root)return;let g=db.garages[selected],rows=(g?.vehicles||[]).map(v=>'<tr><td>'+esc(v.grade)+'</td><td>'+esc(v.model)+'</td><td>★'+v.stars+'</td><td>'+v.qty+'</td></tr>').join('');root.innerHTML='<style>#dft-root{position:fixed;z-index:2147483646;bottom:10px;right:10px;width:min(380px,calc(100vw - 20px));font:13px system-ui;color:#f3f5f9}#dft-root *{box-sizing:border-box}#dft-root .panel{background:#18212e;border:1px solid #748096;border-radius:12px;padding:10px;max-height:65dvh;overflow:auto;box-shadow:0 5px 25px #0009}#dft-root button,#dft-root select{background:#31445b;color:white;border:1px solid #667b96;border-radius:6px;padding:7px;margin:3px}#dft-root table{width:100%;font-size:12px;border-collapse:collapse}#dft-root td{padding:4px;border-bottom:1px solid #3d4b5c}#dft-root small{color:#bbc8d8}</style><div class="panel"><div style="display:flex;justify-content:space-between;align-items:center"><b>🚗 차량 추적기 v'+VERSION+'</b><button id="dft-toggle">접기</button></div><div id="dft-body"><select id="dft-user">'+USERS.map(u=>'<option '+(u===selected?'selected':'')+'>'+u+'</option>').join('')+'</select><button id="dft-garage">차고 저장</button><button id="dft-trades">거래 수집</button><button id="dft-export">JSON 백업</button><label style="display:block"><input type="checkbox" id="dft-auto" '+(db.settings.auto?'checked':'')+'> 60초 자동 검사 (열린 화면)</label><small id="dft-note">'+esc(message)+'</small><h4>'+esc(selected)+' 차고 · '+(g?.vehicles.length||0)+'종</h4><small>최근 확인: '+esc(g?.updatedAt||'없음')+'</small><table>'+rows+'</table><h4>최근 변동</h4><small>'+esc(db.events.slice(-4).map(e=>e.user+': '+e.changes.map(c=>c.key+' '+c.delta).join(', ')).join(' / ')||'없음')+'</small><h4>거래 기록 '+db.transactions.length+'건</h4><small>거래 기록만으로 차고를 임의 변경하지 않음. 강화 결과는 추정만 가능.</small></div></div>';let body=$('#dft-body');$('#dft-toggle').onclick=e=>{let closed=body.style.display==='none';body.style.display=closed?'':'none';e.target.textContent=closed?'접기':'열기';};$('#dft-user').onchange=e=>{selected=e.target.value;render();};$('#dft-garage').onclick=()=>recordGarage(selected);$('#dft-trades').onclick=()=>recordTrades();$('#dft-export').onclick=exportData;$('#dft-auto').onchange=e=>{db.settings.auto=e.target.checked;save();};}
-function init(){let root=document.createElement('div');root.id='dft-root';document.body.appendChild(root);render();setInterval(()=>{if(!db.settings.auto)return;let p=activePanel(),u=detectOwner(p);if(u){selected=u;recordGarage(u,true);}else recordTrades(true);},60000);}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+(function () {
+  'use strict';
+  const VERSION = '1.1.2';
+  const KEY = 'dopamine-fleet-tracker-v1';
+  const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
+  const ALIASES = {'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
+  if (document.getElementById('dft-root')) return;
+  let db;
+  try { db = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (_) { db = {}; }
+  db = Object.assign({version:1,garages:{},snapshots:[],transactions:[],events:[],seen:[],settings:{auto:true}},db);
+  db.settings = Object.assign({auto:true},db.settings || {});
+  let selected = 'ㅇ발';
+  let message = '차고 팝업을 열고 참가자를 선택해 저장하세요.';
+  let collapsed = false;
+  const root = document.createElement('div');
+  root.id = 'dft-root';
+  const shadow = root.attachShadow({mode:'open'});
+  const clean = s => String(s || '').replace(/\s+/g,' ').trim();
+  const who = s => ALIASES[clean(s)] || clean(s);
+  const date = () => new Date().toISOString();
+  const save = () => localStorage.setItem(KEY,JSON.stringify(db));
+  const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g,c => {
+    if (c === '&') return '&amp;';
+    if (c === '<') return '&lt;';
+    if (c === '>') return '&gt;';
+    if (c === '"') return '&quot;';
+    return '&#39;';
+  });
+  function note(s) { message = s; render(); }
+  function panels() {
+    const selectors = '[role="dialog"],[aria-modal="true"],[class*="modal"],[class*="Modal"],[class*="popup"],[class*="Popup"]';
+    return [...document.querySelectorAll(selectors)].filter(e => e !== root && !root.contains(e) && e.getClientRects().length);
+  }
+  function panel() {
+    const all = panels().sort((a,b) => (a.innerText || '').length - (b.innerText || '').length);
+    return all[0] || null;
+  }
+  function detectOwner(p) {
+    const t = clean(p && p.innerText).slice(0,250);
+    for (const u of USERS) if (t.includes(u+'의 차고') || t.includes(u+' 차고')) return u;
+    for (const [a,u] of Object.entries(ALIASES)) if (t.includes(a+'의 차고') || t.includes(a+' 차고')) return u;
+    return null;
+  }
+  function parseGarage(p) {
+    if (!p) return [];
+    const items = [];
+    const candidates = [...p.querySelectorAll('div,li,article')];
+    for (const el of candidates) {
+      const t = el.innerText || '';
+      if (!/최고\s*★\s*[1-5]/.test(t) || t.length > 220) continue;
+      if ([...el.children].some(ch => /최고\s*★\s*[1-5]/.test(ch.innerText || ''))) continue;
+      const star = t.match(/최고\s*★\s*([1-5])\s*[·•]?\s*(\d+)\s*대/);
+      const grade = t.match(/(?:^|\s)(SSR|SR|S|R)(?=\s|$)/);
+      if (!star || !grade) continue;
+      const lines = t.split('\n').map(clean).filter(Boolean);
+      const i = lines.findIndex(x => x.includes('최고 ★'));
+      const name = i > 0 ? lines.slice(Math.max(0,i-2),i).filter(x => !/^(SSR|SR|S|R)$/.test(x)).join(' ') : '';
+      if (!name || name.length > 65) continue;
+      items.push({grade:grade[1],model:name,stars:Number(star[1]),qty:Number(star[2])});
+    }
+    const map = new Map();
+    for (const v of items) map.set([v.grade,v.model,v.stars].join('|'),v);
+    return [...map.values()];
+  }
+  function differences(a,b) {
+    const x = new Map(a.map(v=>[[v.grade,v.model,v.stars].join('|'),v.qty]));
+    const y = new Map(b.map(v=>[[v.grade,v.model,v.stars].join('|'),v.qty]));
+    return [...new Set([...x.keys(),...y.keys()])].map(k=>({key:k,delta:(y.get(k)||0)-(x.get(k)||0)})).filter(v=>v.delta);
+  }
+  function captureGarage(silent=false) {
+    const p = panel();
+    const actual = detectOwner(p);
+    if (!p) { if (!silent) note('차고 팝업을 찾지 못했습니다.'); return; }
+    if (!actual) { if (!silent) note('차고 소유자를 인식하지 못했습니다. 잘못된 참가자에게 저장하지 않습니다.'); return; }
+    if (actual !== selected && !silent) { note('현재 차고는 '+actual+'입니다. 참가자 선택을 확인하세요.'); return; }
+    const cars = parseGarage(p);
+    if (!cars.length) { if (!silent) note('차량 카드 0건 인식. 실제 DOM에 맞춘 파서 조정이 필요합니다.'); return; }
+    const prev = db.garages[actual]?.vehicles || [];
+    const changes = differences(prev,cars);
+    if (prev.length && !changes.length) { if (!silent) note(actual+' 차고 변경 없음 ('+cars.length+'종)'); return; }
+    const at = date();
+    db.garages[actual] = {vehicles:cars,updatedAt:at,source:'visible-garage'};
+    db.snapshots.push({user:actual,at,vehicles:cars,changes});
+    if (prev.length && changes.length) db.events.push({user:actual,at,changes,note:'변동 원인 미확정'});
+    db.snapshots = db.snapshots.slice(-800);
+    db.events = db.events.slice(-800);
+    save();
+    selected = actual;
+    note(actual+' 차고 '+cars.length+'종 저장, 변경 '+changes.length+'건');
+  }
+  function captureTrades(silent=false) {
+    const p = panel();
+    if (!p || !/거래|장터/.test(p.innerText || '')) { if (!silent) note('거래 내역 팝업을 열어주세요.'); return; }
+    const rows = [...p.querySelectorAll('tr,li,[class*="trade"],[class*="history"]')];
+    let added = 0;
+    for (const el of rows) {
+      const t = clean(el.innerText);
+      if (t.length < 10 || t.length > 400) continue;
+      const pair = t.match(/(그레이트|픽홀|참돔|킹황|갱서|ㅇ발|구레긔|피콜로|ㅇ샘|영감|톩끼)\s*(?:→|->)\s*(그레이트|픽홀|참돔|킹황|갱서|ㅇ발|구레긔|피콜로|ㅇ샘|영감|톩끼)/);
+      const price = t.match(/([\d,]+)\s*E\b/i);
+      if (!pair || !price) continue;
+      const key = t.replace(/\s+/g,'');
+      if (db.seen.includes(key)) continue;
+      db.seen.push(key);
+      db.transactions.push({seller:who(pair[1]),buyer:who(pair[2]),price:Number(price[1].replace(/,/g,'')),barter:price[1]==='1',raw:t,observedAt:date()});
+      added++;
+    }
+    db.seen = db.seen.slice(-3000);
+    db.transactions = db.transactions.slice(-2000);
+    save();
+    if (added || !silent) note('거래 신규 '+added+'건 / 누적 '+db.transactions.length+'건');
+  }
+  function exportJson() {
+    const blob = new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'dopamine-fleet-'+date().slice(0,10)+'.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }
+  function render() {
+    const g = db.garages[selected];
+    const rows = (g?.vehicles || []).map(v => '<tr><td>'+escapeHtml(v.grade)+'</td><td>'+escapeHtml(v.model)+'</td><td>★'+v.stars+'</td><td>'+v.qty+'</td></tr>').join('');
+    shadow.innerHTML = '<style>:host{all:initial}*{box-sizing:border-box}.wrap{font:13px system-ui,sans-serif;color:#f4f6fa;background:#172334;border:1px solid #9ba7b8;border-radius:12px;box-shadow:0 5px 30px #0009;max-height:70dvh;overflow:auto}.top{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#29405b}button,select{background:#395471;color:#fff;border:1px solid #9aafc4;border-radius:6px;padding:7px;cursor:pointer;margin:2px}.body{padding:8px}.info{display:block;color:#d7e0ee;margin:6px 0;overflow-wrap:anywhere}table{width:100%;font-size:12px;border-collapse:collapse}td{border-bottom:1px solid #53657c;padding:4px}h4{margin:8px 0 3px}</style>'+
+    '<div class="wrap"><div class="top"><b>🚗 차량 추적기 v'+VERSION+'</b><button id="toggle">'+(collapsed?'열기':'접기')+'</button></div>'+
+    (collapsed?'':'<div class="body"><select id="user">'+USERS.map(u=>'<option '+(u===selected?'selected':'')+'>'+u+'</option>').join('')+'</select><button id="garage">차고 저장</button><button id="trades">거래 수집</button><button id="export">JSON</button><label class="info"><input id="auto" type="checkbox" '+(db.settings.auto?'checked':'')+'> 60초 자동 검사 (열린 화면)</label><small class="info">'+escapeHtml(message)+'</small><h4>'+escapeHtml(selected)+' · '+(g?.vehicles.length||0)+'종</h4><table>'+rows+'</table><small class="info">최신 확인: '+escapeHtml(g?.updatedAt||'없음')+'</small><small class="info">강화 성공·실패는 차고 변화로 추정하며 확정하지 않습니다.</small></div>')+'</div>';
+    shadow.getElementById('toggle').onclick = () => {collapsed=!collapsed;render();};
+    if (collapsed) return;
+    shadow.getElementById('user').onchange = e => {selected=e.target.value;render();};
+    shadow.getElementById('garage').onclick = () => captureGarage();
+    shadow.getElementById('trades').onclick = () => captureTrades();
+    shadow.getElementById('export').onclick = exportJson;
+    shadow.getElementById('auto').onchange = e => {db.settings.auto=e.target.checked;save();};
+  }
+  function init() {
+    document.body.appendChild(root);
+    root.style.setProperty('position','fixed','important');
+    root.style.setProperty('right','12px','important');
+    root.style.setProperty('bottom','12px','important');
+    root.style.setProperty('width','min(370px, calc(100vw - 24px))','important');
+    root.style.setProperty('z-index','2147483647','important');
+    root.style.setProperty('display','block','important');
+    render();
+    setInterval(()=>{
+      if (!db.settings.auto) return;
+      const p=panel(),u=detectOwner(p);
+      if (u) {selected=u;captureGarage(true);}
+      else captureTrades(true);
+    },60000);
+  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',init,{once:true});
+  else init();
 })();
