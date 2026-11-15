@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.23 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.24 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.23';
+  const VERSION = '1.1.24';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -327,17 +327,24 @@
           if(stable>=2&&scroll.scrollTop+scroll.clientHeight>=scroll.scrollHeight-5){complete=true;break;}
         }
       }
-      let added=0,skipped=0;
+      let added=0,skipped=0,rawAdded=0,parsedAdded=0;
       for(const raw of found){
-        const item=parseTradeEntry(raw,screen.type);
-        if(!item){skipped++;continue;}
-        const key=[item.type,item.occurredAt,item.seller,item.buyer,item.model,item.stars,item.price].join('|');
+        let item=parseTradeEntry(raw,screen.type);
+        if(!item) {
+          // Preserve an unparsed source entry without inventing seller, car or transaction.
+          const t=clean(raw);
+          const tm=t.match(/(\d{2}\.\d{2}\.\d{2}\.?\s*\d{2}:\d{2})/);
+          item={type:'unparsed',screen:screen.type,seller:null,buyer:null,model:null,stars:null,price:null,
+            occurredAt:tm?tm[1]:null,raw:t,parsed:false,observedAt:date()};
+        } else {item.parsed=true;}
+        const key='feed|'+screen.type+'|'+clean(raw);
         if(db.seen.includes(key))continue;
         db.seen.push(key);db.transactions.push(item);added++;
+        if(item.parsed)parsedAdded++;else rawAdded++;
       }
       db.seen=db.seen.slice(-6000);db.transactions=db.transactions.slice(-4000);
       save();
-      if(added||!silent)note(screen.type+': 신규 '+added+'건 / 분석 제외 '+skipped+'건 / 누적 '+db.transactions.length+'건'+(complete?' (끝까지 확인)':' (일부만 확인)'));
+      if(added||!silent)note(screen.type+': 신규 '+added+'건 (해석 '+parsedAdded+' / 원문 보관 '+rawAdded+') / 누적 '+db.transactions.length+'건'+(complete?' (끝까지 확인)':' (일부만 확인)'));
     }catch(e){if(!silent)note('거래 수집 오류: '+String(e.message||e));}
     finally{if(scroll&&scroll.isConnected)scroll.scrollTop=oldTop;tradeCollecting=false;}
   }
