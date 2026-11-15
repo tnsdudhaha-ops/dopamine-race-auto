@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.36 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.37 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.36';
+  const VERSION = '1.1.37';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -281,6 +281,27 @@
     if(!btn)return false;
     btn.click();return true;
   }
+  function downloadAiGarageJson() {
+    const generatedAt=date();
+    const participants=USERS.map(user=>{
+      const g=db.garages[user];
+      const vehicles=(g?.vehicles||[]).map(v=>({
+        grade:v.grade,model:v.model,maxStars:Number(v.stars),
+        quantity:Number(v.qty),starBreakdown:Array.isArray(v.breakdown)?v.breakdown:[]
+      }));
+      return {user,updatedAt:g?.updatedAt||null,modelCount:vehicles.length,
+        vehicleCount:vehicles.reduce((n,v)=>n+v.quantity,0),vehicles};
+    });
+    const payload={schema:'dopamine-race-garages-ai-v1',generatedAt,
+      source:'도파민레이스 차량 추적기',trackerVersion:VERSION,participants};
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');
+    link.href=url;link.download='dopamine-race-garages-'+generatedAt.replace(/[:.]/g,'-')+'.json';
+    document.body.appendChild(link);
+    try{link.click();}finally{link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
+    return link.download;
+  }
   async function refreshAllGarages() {
     if(fleetRefreshing||collecting)return;
     const initial=participantRows();
@@ -310,7 +331,14 @@
         if(!closeGarage(p)){note(owner+' 차고 닫기 실패. 자동 갱신 중단');break;}
         await pause(350);
       }
-      note('전체 차고 갱신 완료: '+successes+'/6명 성공 · '+(results.length-successes)+'명 실패. '+results.join(' / '));
+      if(successes===6){
+        try{
+          const filename=downloadAiGarageJson();
+          note('6/6명 갱신 완료 · AI 분석용 JSON 자동 저장 요청: '+filename+' · 파일을 ChatGPT에 첨부하세요.');
+        }catch(e){note('6/6명 갱신 완료 · JSON 저장 실패: '+String(e.message||e));}
+      }else{
+        note('전체 차고 갱신: '+successes+'/6명 성공 · JSON 자동 생성 보류. '+results.join(' / '));
+      }
     }catch(e){note('전체 갱신 오류: '+String(e.message||e));}
     finally{fleetRefreshing=false;}
   }
