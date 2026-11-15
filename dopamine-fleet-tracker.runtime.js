@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.5 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.6 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.5';
+  const VERSION = '1.1.6';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -42,24 +42,40 @@
     for (const [a,u] of Object.entries(ALIASES)) if (t.includes(a+'의 차고') || t.includes(a+' 차고')) return u;
     return null;
   }
+  function expectedTotal(p) {
+    const m=(p?.innerText||'').match(/보유차량\s*[·•:]?\s*(\d+)\s*대/);
+    return m ? Number(m[1]) : null;
+  }
   function parseGarage(p) {
     if (!p) return [];
-    const items = [];
-    const candidates = [...p.querySelectorAll('div,li,article')];
-    for (const el of candidates) {
-      const t = el.innerText || '';
-      if (!/최고\s*★\s*[1-5]/.test(t) || t.length > 220) continue;
-      if ([...el.children].some(ch => /최고\s*★\s*[1-5]/.test(ch.innerText || ''))) continue;
-      const star = t.match(/최고\s*★\s*([1-5])\s*[·•]?\s*(\d+)\s*대/);
-      const grade = t.match(/(?:^|\s)(SSR|SR|S|R)(?=\s|$)/);
-      if (!star || !grade) continue;
-      const lines = t.split('\n').map(clean).filter(Boolean);
-      const i = lines.findIndex(x => x.includes('최고 ★'));
-      const name = i > 0 ? lines.slice(Math.max(0,i-2),i).filter(x => !/^(SSR|SR|S|R)$/.test(x)).join(' ') : '';
-      if (!name || name.length > 65) continue;
-      items.push({grade:grade[1],model:name,stars:Number(star[1]),qty:Number(star[2])});
+    const items=[];
+    for (const el of p.querySelectorAll('div,li,article')) {
+      const t=el.innerText||'';
+      if (!/최고\s*★\s*[1-5]/.test(t) || t.length>300) continue;
+      if ([...el.children].some(ch=>/최고\s*★\s*[1-5]/.test(ch.innerText||''))) continue;
+      const grade=t.match(/(?:^|\s)(SSR|SR|S|R)(?=\s|$)/);
+      const summary=t.match(/최고\s*★\s*([1-5])\s*[·•]?\s*(\d+)\s*대/);
+      if (!grade||!summary) continue;
+      const lines=t.split('\n').map(clean).filter(Boolean);
+      const ix=lines.findIndex(x=>/최고\s*★/.test(x));
+      if (ix<1) continue;
+      let nameParts=lines.slice(Math.max(0,ix-3),ix).filter(x=>
+        !/^(SSR|SR|S|R)$/.test(x) &&
+        !/^ERS|^⚡|^탑승중$|^최고\s*★|^\d+성\s*[×x]\s*\d+/.test(x) &&
+        !/^(\d+\s*RP|\d+\s*E)$/.test(x)
+      );
+      const model=nameParts.slice(-2).join(' ').replace(/\s*최고\s*$/,'').trim();
+      if (!model||model.length>65) continue;
+      const breakdown=[];
+      const breakdownText=lines.slice(ix+1).join(' ');
+      for (const m of breakdownText.matchAll(/([1-5])\s*성\s*[×x]\s*(\d+)/g)) {
+        breakdown.push({stars:Number(m[1]),qty:Number(m[2])});
+      }
+      const qty=Number(summary[2]), stars=Number(summary[1]);
+      const sum=breakdown.reduce((n,x)=>n+x.qty,0);
+      items.push({grade:grade[1],model,stars,qty,breakdown:sum===qty?breakdown:[]});
     }
-    const map = new Map();
+    const map=new Map();
     for (const v of items) map.set([v.grade,v.model,v.stars].join('|'),v);
     return [...map.values()];
   }
@@ -115,14 +131,17 @@
         }
       }
       const cars = [...seen.values()];
+      const total=cars.reduce((n,v)=>n+v.qty,0);
+      const expected=expectedTotal(p);
       if (!complete || !p.isConnected) {
         if (!silent) note('스크롤 끝까지 확인하지 못해 저장하지 않았습니다. 수집 '+cars.length+'종');
         return;
       }
       if (!cars.length) {if (!silent) note('차량 카드 0건 인식. 화면 구조 확인이 필요합니다.');return;}
+      if (expected!==null && total!==expected) {if (!silent) note('수량 불일치: 게임 '+expected+'대 / 추적 '+total+'대. 기존 기록 보호를 위해 저장하지 않았습니다.');return;}
       const prev = db.garages[actual]?.vehicles || [];
       const changes = differences(prev,cars);
-      if (prev.length && !changes.length) {if (!silent) note(actual+' 차고 변경 없음 ('+cars.length+'종)');return;}
+      if (prev.length && !changes.length) {if (!silent) note(actual+' 차고 변경 없음 ('+cars.length+'종 / '+total+'대)');return;}
       const at = date();
       db.garages[actual] = {vehicles:cars,updatedAt:at,source:'full-popup-scroll'};
       db.snapshots.push({user:actual,at,vehicles:cars,changes});
@@ -131,7 +150,7 @@
       db.events = db.events.slice(-800);
       save();
       selected = actual;
-      if (!silent) note(actual+' 전체 스크롤 수집 '+cars.length+'종 저장, 변경 '+changes.length+'건');
+      if (!silent) note(actual+' 전체 수집 '+cars.length+'종 / '+total+'대 저장, 변경 '+changes.length+'건');
     } catch(e) {
       if (!silent) note('차고 수집 오류: '+String(e.message || e));
     } finally {
@@ -171,11 +190,16 @@
   }
   function render() {
     const g = db.garages[selected];
-    const rows = (g?.vehicles || []).map(v => '<tr><td>'+escapeHtml(v.grade)+'</td><td>'+escapeHtml(v.model)+'</td><td>★'+v.stars+'</td><td>'+v.qty+'</td></tr>').join('');
+    const rows = (g?.vehicles || []).map(v => {
+      const model=escapeHtml(String(v.model||'').replace(/\\s*최고\\s*$/,'').trim());
+      const detail=Array.isArray(v.breakdown)&&v.breakdown.length>1?' <small>('+v.breakdown.map(x=>'★'+x.stars+' '+x.qty+'대').join(' / ')+')</small>':'';
+      return '<tr><td>'+escapeHtml(v.grade)+'</td><td>'+model+' ★'+v.stars+detail+'</td><td>'+v.qty+'대</td></tr>';
+    }).join('');
+    const total=(g?.vehicles||[]).reduce((n,v)=>n+(Number(v.qty)||0),0);
     root.style.setProperty('width',collapsed?'190px':'min(370px, calc(100vw - 24px))','important');
     shadow.innerHTML = '<style>:host{all:initial}*{box-sizing:border-box}.wrap{font:13px system-ui,sans-serif;color:#f4f6fa;background:#172334;border:1px solid #9ba7b8;border-radius:12px;box-shadow:0 5px 30px #0009;max-height:70dvh;overflow:auto}.top{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#29405b}button,select{background:#395471;color:#fff;border:1px solid #9aafc4;border-radius:6px;padding:7px;cursor:pointer;margin:2px}.body{padding:8px}.info{display:block;color:#d7e0ee;margin:6px 0;overflow-wrap:anywhere}table{width:100%;font-size:12px;border-collapse:collapse}td{border-bottom:1px solid #53657c;padding:4px}h4{margin:8px 0 3px}</style>'+
     '<div class="wrap"><div class="top"><b>🚗 차량 추적기 v'+VERSION+'</b><button id="toggle">'+(collapsed?'열기':'접기')+'</button></div>'+
-    (collapsed?'':'<div class="body"><select id="user">'+USERS.map(u=>'<option '+(u===selected?'selected':'')+'>'+u+'</option>').join('')+'</select><button id="garage">차고 저장</button><button id="trades">거래 수집</button><button id="export">JSON</button><label class="info"><input id="auto" type="checkbox" '+(db.settings.auto?'checked':'')+'> 60초 자동 검사 (열린 화면, 팝업 자동 스크롤)</label><small class="info">'+escapeHtml(message)+'</small><h4>'+escapeHtml(selected)+' · '+(g?.vehicles.length||0)+'종</h4><table>'+rows+'</table><small class="info">최신 확인: '+escapeHtml(g?.updatedAt||'없음')+'</small><small class="info">강화 성공·실패는 차고 변화로 추정하며 확정하지 않습니다.</small></div>')+'</div>';
+    (collapsed?'':'<div class="body"><select id="user">'+USERS.map(u=>'<option '+(u===selected?'selected':'')+'>'+u+'</option>').join('')+'</select><button id="garage">차고 저장</button><button id="trades">거래 수집</button><button id="export">JSON</button><label class="info"><input id="auto" type="checkbox" '+(db.settings.auto?'checked':'')+'> 60초 자동 검사 (열린 화면, 팝업 자동 스크롤)</label><small class="info">'+escapeHtml(message)+'</small><h4>'+escapeHtml(selected)+' · '+(g?.vehicles.length||0)+'종 / '+total+'대</h4><table>'+rows+'</table><small class="info">최신 확인: '+escapeHtml(g?.updatedAt||'없음')+'</small><small class="info">강화 성공·실패는 차고 변화로 추정하며 확정하지 않습니다.</small></div>')+'</div>';
     shadow.getElementById('toggle').onclick = () => {collapsed=!collapsed;render();};
     if (collapsed) return;
     shadow.getElementById('user').onchange = e => {selected=e.target.value;render();};
