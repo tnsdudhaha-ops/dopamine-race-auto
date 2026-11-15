@@ -1,14 +1,14 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-15T10:33:13.856Z",
+  "generatedAt": "2026-11-15T21:30:50.871Z",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-15T06:07:01.107Z",
+      "updatedAt": "2026-11-15T21:30:42.964Z",
       "modelCount": 9,
-      "vehicleCount": 12,
+      "vehicleCount": 13,
       "vehicles": [
         {
           "grade": "SR",
@@ -56,7 +56,7 @@
           "grade": "R",
           "model": "대우 다마스",
           "maxStars": 2,
-          "quantity": 2,
+          "quantity": 3,
           "starBreakdown": [
             {
               "stars": 2,
@@ -64,7 +64,7 @@
             },
             {
               "stars": 1,
-              "qty": 1
+              "qty": 2
             }
           ]
         },
@@ -198,9 +198,9 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-15T06:07:04.210Z",
-      "modelCount": 13,
-      "vehicleCount": 13,
+      "updatedAt": "2026-11-15T21:30:46.066Z",
+      "modelCount": 12,
+      "vehicleCount": 12,
       "vehicles": [
         {
           "grade": "SSR",
@@ -233,13 +233,6 @@
         {
           "grade": "S",
           "model": "볼보 XC40",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "S",
-          "model": "쉐보레 콜로라도",
           "maxStars": 1,
           "quantity": 1,
           "starBreakdown": []
