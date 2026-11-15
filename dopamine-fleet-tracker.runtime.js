@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.38 (loaded by bootstrap)
+// Dopamine Vehicle Analyzer Release 1.0 (loaded by existing bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.38';
+  const VERSION = '1.0';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -565,22 +565,17 @@
     setTimeout(()=>URL.revokeObjectURL(url),1500);
   }
   function render() {
-    const g = db.garages[selected];
-    const rows = (g?.vehicles || []).map(v => {
-      const model=escapeHtml(String(v.model||'').replace(/\\s*최고\\s*$/,'').trim());
-      const detail=Array.isArray(v.breakdown)&&v.breakdown.length>1?' <small>('+v.breakdown.map(x=>'★'+x.stars+' '+x.qty+'대').join(' / ')+')</small>':'';
-      return '<tr><td>'+escapeHtml(v.grade)+'</td><td>'+model+' ★'+v.stars+detail+'</td><td>'+v.qty+'대</td></tr>';
-    }).join('');
-    const total=(g?.vehicles||[]).reduce((n,v)=>n+(Number(v.qty)||0),0);
-    root.style.setProperty('width',collapsed?'190px':'min(370px, calc(100vw - 24px))','important');
-    shadow.innerHTML = '<style>:host{all:initial}*{box-sizing:border-box}.wrap{font:13px system-ui,sans-serif;color:#f4f6fa;background:#172334;border:1px solid #9ba7b8;border-radius:12px;box-shadow:0 5px 30px #0009;max-height:70dvh;overflow:auto}.top{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#29405b}button,select{background:#395471;color:#fff;border:1px solid #9aafc4;border-radius:6px;padding:7px;cursor:pointer;margin:2px}.body{padding:8px}.info{display:block;color:#d7e0ee;margin:6px 0;overflow-wrap:anywhere}table{width:100%;font-size:12px;border-collapse:collapse}td{border-bottom:1px solid #53657c;padding:4px}h4{margin:8px 0 3px}</style>'+
-    '<div class="wrap"><div class="top"><b>🚗 차량 추적기 v'+VERSION+'</b><button id="toggle">'+(collapsed?'열기':'접기')+'</button></div>'+
-    (collapsed?'':'<div class="body"><select id="user">'+USERS.map(u=>'<option '+(u===selected?'selected':'')+'>'+u+'</option>').join('')+'</select><button id="fleet">전체 차고 갱신</button><small class="info">'+escapeHtml(message)+'</small><h4>'+escapeHtml(selected)+' · '+(g?.vehicles.length||0)+'종 / '+total+'대</h4><table>'+rows+'</table><small class="info">최신 확인: '+escapeHtml(g?.updatedAt||'없음')+'</small></div>')+'</div>';
-    shadow.getElementById('toggle').onclick = () => {collapsed=!collapsed;render();};
-    if (collapsed) return;
-    shadow.getElementById('user').onchange = e => {selected=e.target.value;render();};
-    shadow.getElementById('fleet').onclick = refreshAllGarages;
-
+    root.style.setProperty('width','min(230px, calc(100vw - 16px))','important');
+    const busy=fleetRefreshing||collecting;
+    const status=String(message||'');
+    const shortStatus=status.includes('GitHub 자동 업로드 성공')?'업로드 완료 ✓':
+      status.includes('업로드 중')?'GitHub 업로드 중…':
+      status.includes('전체 차고 갱신')?status.match(/전체 차고 갱신 \d+\/6[^:]*/)?.[0]||'차고 수집 중…':
+      status.includes('오류')||status.includes('실패')||status.includes('보류')||status.includes('미등록')?status:'';
+    shadow.innerHTML='<style>:host{all:initial}*{box-sizing:border-box}.wrap{font:12px system-ui,sans-serif;color:#f4f6fa;background:#172334;border:1px solid #71859b;border-radius:9px;box-shadow:0 3px 15px #0008;padding:6px;max-width:230px}button{width:100%;background:#395471;color:#fff;border:1px solid #9aafc4;border-radius:6px;padding:8px 10px;cursor:pointer;font-weight:700;font-size:12px}button:disabled{opacity:.65;cursor:wait}.status{font-size:10px;line-height:1.35;color:#d7e0ee;margin-top:4px;overflow-wrap:anywhere;max-height:62px;overflow:auto}</style>'+
+      '<div class="wrap"><button id="fleet" '+(busy?'disabled':'')+'>🚗 차량 분석기 1.0 · '+(busy?'갱신 중…':'차량 갱신')+'</button>'+
+      (shortStatus?'<div class="status" title="'+escapeHtml(status)+'">'+escapeHtml(shortStatus)+'</div>':'')+'</div>';
+    shadow.getElementById('fleet').onclick=refreshAllGarages;
   }
   function relocateOverlay() {
     // Ordinary CSS modals are not in the browser top layer: mount on body.
@@ -603,17 +598,11 @@
     root.style.setProperty('position','fixed','important');
     root.style.setProperty('right','8px','important');
     root.style.setProperty('bottom','8px','important');
-    root.style.setProperty('width','min(370px, calc(100vw - 24px))','important');
+    root.style.setProperty('width','min(230px, calc(100vw - 16px))','important');
     root.style.setProperty('z-index','2147483647','important');
     root.style.setProperty('display','block','important');
     render();
-    setInterval(()=>{relocateOverlay();const u=currentGarageOwner();if(u&&u!==selected){selected=u;message=u+' 차고 인식됨';render();}},1200);
-    setInterval(()=>{
-      if (!db.settings.auto||fleetRefreshing) return;
-      const p=activeGaragePanel(),u=currentGarageOwner();
-      if (u) {selected=u;render();captureGarage(true);}
-      else captureTrades(true);
-    },60000);
+    setInterval(relocateOverlay,1200);
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',init,{once:true});
   else init();
