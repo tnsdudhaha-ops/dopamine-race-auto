@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.28 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.29 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.28';
+  const VERSION = '1.1.29';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -332,6 +332,12 @@
       return el.clientHeight>120&&el.scrollHeight>el.clientHeight+25&&/(auto|scroll)/.test(cs.overflowY);
     }).sort((a,b)=>(b.scrollHeight-b.clientHeight)-(a.scrollHeight-a.clientHeight))[0]||null;
   }
+  db.feedCheckpoints=db.feedCheckpoints||{};
+  function feedTimestamp(raw) {
+    const m=String(raw||'').match(/(?:^|\s)(\d{2})\.(\d{2})\.(\d{2})\.\s*(\d{2}):(\d{2})/);
+    if(!m)return null;
+    return '20'+m[1]+'-'+m[2]+'-'+m[3]+'T'+m[4]+':'+m[5];
+  }
   let tradeCollecting=false;
   async function captureTrades(silent=false) {
     if(tradeCollecting)return;
@@ -341,6 +347,7 @@
     const scroll=tradeScrollContainer(screen.container);
     const oldTop=scroll?scroll.scrollTop:0;
     const found=new Set();
+    const checkpoint=db.feedCheckpoints[screen.type]||null;
     const collect=()=>{for(const raw of tradeRows(screen.container))found.add(raw);};
     let complete=!scroll;
     try {
@@ -359,8 +366,12 @@
         }
       }
       const reparsed=reparseStoredTrades();
-      let added=0,skipped=0,rawAdded=0,parsedAdded=0,vehicleCount=0,otherCount=0;
+      let added=0,skipped=0,rawAdded=0,parsedAdded=0,vehicleCount=0,otherCount=0,older=0,latest=null,undated=0;
       for(const raw of found){
+        const stamp=feedTimestamp(raw);
+        if(stamp&&(!latest||stamp>latest))latest=stamp;
+        if(checkpoint&&stamp<checkpoint&&stamp){older++;continue;}
+        if(!stamp)undated++;
         let item=parseTradeEntry(raw,screen.type);
         if(!item) {
           // Preserve an unparsed source entry without inventing seller, car or transaction.
@@ -378,8 +389,9 @@
       }
       for(const item of db.transactions)if(!item.category)item.category=classifyFeedItem(item);
       db.seen=db.seen.slice(-6000);db.transactions=db.transactions.slice(-4000);
+      if(complete&&latest&&undated===0)db.feedCheckpoints[screen.type]=!checkpoint||latest>checkpoint?latest:checkpoint;
       save();
-      if(added||!silent)note(screen.type+': 신규 '+added+'건 (차량 관련 '+vehicleCount+' / 기타 '+otherCount+' / 신규 구조화 '+parsedAdded+' / 기존 재분석 '+reparsed+' / 원문 '+rawAdded+') / 누적 '+db.transactions.length+'건'+(complete?' (끝까지 확인)':' (일부만 확인)'));
+      if(added||!silent)note(screen.type+': 신규 '+added+'건 (차량 관련 '+vehicleCount+' / 기타 '+otherCount+' / 신규 구조화 '+parsedAdded+' / 기존 재분석 '+reparsed+' / 원문 '+rawAdded+') / 이전 기록 건너뜀 '+older+' / 기준 '+(db.feedCheckpoints[screen.type]||'미설정')+' / 누적 '+db.transactions.length+'건'+(complete?' (끝까지 확인)':' (일부만 확인)'));
     }catch(e){if(!silent)note('거래 수집 오류: '+String(e.message||e));}
     finally{if(scroll&&scroll.isConnected)scroll.scrollTop=oldTop;tradeCollecting=false;}
   }
