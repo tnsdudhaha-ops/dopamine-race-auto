@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.8 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.9 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.8';
+  const VERSION = '1.1.9';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -33,13 +33,20 @@
     return [...document.querySelectorAll(selectors)].filter(e => e !== root && !root.contains(e) && e.getClientRects().length);
   }
   function panel() {
-    const all = panels().sort((a,b) => (a.innerText || '').length - (b.innerText || '').length);
-    return all.find(e=>/보유\s*차량|최고\s*★|차고/.test(e.innerText||'')) || all[0] || null;
+    const all=panels();
+    const matches=all.filter(e=>/보유\\s*차량|최고\\s*★|차고/.test(e.innerText||''));
+    return (matches.length?matches:all).sort((a,b)=>(b.innerText||'').length-(a.innerText||'').length)[0]||null;
   }
   function detectOwner(p) {
-    const t = clean(p && p.innerText).slice(0,1000);
-    for (const u of USERS) if (t.includes(u+'의 차고') || t.includes(u+' 차고') || t.includes(u+'님 차고') || t.includes('차고 · '+u)) return u;
-    for (const [a,u] of Object.entries(ALIASES)) if (t.includes(a+'의 차고') || t.includes(a+' 차고') || t.includes(a+'님 차고') || t.includes('차고 · '+a)) return u;
+    if (!p) return null;
+    const names=[...USERS,...Object.keys(ALIASES)];
+    const candidates=[p,...p.querySelectorAll('h1,h2,h3,h4,[class*="title"],[class*="header"]')];
+    for(const el of candidates) {
+      const t=clean(el.innerText||'').slice(0,1200);
+      for(const name of names) {
+        if(t.includes(name+'의 차고')||t.includes(name+' 차고')||t.includes(name+'님 차고')) return who(name);
+      }
+    }
     return null;
   }
   function expectedTotal(p) {
