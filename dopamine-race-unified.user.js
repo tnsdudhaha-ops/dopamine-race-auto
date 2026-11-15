@@ -1,17 +1,25 @@
 // ==UserScript==
 // @name         도파민 레이스 통합 컨트롤
 // @namespace    dopamine-race-unified
-// @version      1.0.1
-// @description  AUTO Release 3.0 v3.3.20 + 차량 분석기 Release 1.0 / 기존 주행 계산 보존
+// @version      1.0.2
+// @description  AUTO Release 3.0 + 차량 분석기 Release 1.0 + Google Sheets 자동 전송
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-unified.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-unified.user.js
-// @grant        none
+// @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        unsafeWindow
+// @connect      script.google.com
+// @connect      script.googleusercontent.com
 // @run-at       document-idle
 // ==/UserScript==
 
 (function(){
 'use strict';
+// Preserve the existing AUTO engine's access to the actual game page.
+const window=unsafeWindow;
+const localStorage=window.localStorage;
 if(window.__dopamineUnifiedControl?.active)return;
 window.__duMode=true;
 // ==UserScript==
@@ -931,17 +939,83 @@ box.innerHTML='<style>'+
 '#du-integrated label{display:block;font-size:10px;margin-top:5px}#du-integrated input{width:100%;padding:5px;background:#102034;border:1px solid #6c839d;border-radius:5px;color:#fff}'+
 '#du-integrated .settings{max-height:210px;overflow:auto}#du-integrated .mini{display:none;border:1px solid #71869c;background:#192e45;border-radius:22px;padding:10px 14px}'+
 '</style>'+
-'<div class="panel"><div class="head"><strong>🏎️ 도파민 레이스 <small style="color:#b3c8db">통합 v1.0.1</small></strong><div><button id="du-tools">⚙</button> <button id="du-min">−</button></div></div>'+
+'<div class="panel"><div class="head"><strong>🏎️ 도파민 레이스 <small style="color:#b3c8db">통합 v1.0.2</small></strong><div><button id="du-tools">⚙</button> <button id="du-min">−</button></div></div>'+
 '<div class="grid"><button class="primary" id="du-auto">▶ AUTO 주행</button><button class="primary" id="du-garage">🚗 차고 갱신</button></div>'+
-'<div class="status" id="du-status">초기화 중…</div>'+
+'<div class="status" id="du-status">초기화 중…</div><div class="status" id="du-cloud-state">☁ Google Sheets 확인 중…</div>'+
 '<div class="section" id="du-race" hidden><div class="grid"><button id="du-one">▶ 1판 시작</button><button id="du-chain">🔁 타이어 모두</button><button id="du-stop" style="background:#a5313e">■ 중지</button><button id="du-analyze">📊 주행 분석</button></div><div class="status" id="du-race-status"></div></div>'+
-'<div class="section" id="du-advanced" hidden><div class="grid"><button id="du-log">📋 입력 기록 복사</button><button id="du-copy-analysis">📋 누적 분석 복사</button><button id="du-json">💾 누적 JSON 저장</button><button id="du-detect">🔍 차량 다시 읽기</button><button id="du-defaults">↩ 설정 초기화</button><button id="du-export">📥 차고 백업</button><button id="du-trades">🧾 거래 기록 수집</button></div><div class="settings" id="du-settings"></div><button style="width:100%;margin-top:6px" id="du-save">⚙ AUTO 설정 저장</button></div>'+
+'<div class="section" id="du-advanced" hidden><div class="grid"><button id="du-log">📋 입력 기록 복사</button><button id="du-copy-analysis">📋 누적 분석 복사</button><button id="du-json">💾 누적 JSON 저장</button><button id="du-detect">🔍 차량 다시 읽기</button><button id="du-defaults">↩ 설정 초기화</button><button id="du-export">📥 차고 백업</button><button id="du-trades">🧾 거래 기록 수집</button><button id="du-cloud-config">☁ 시트 연결 설정</button><button id="du-cloud-retry">☁ 미전송 기록 전송</button></div><div class="settings" id="du-settings"></div><button style="width:100%;margin-top:6px" id="du-save">⚙ AUTO 설정 저장</button></div>'+
 '<div class="section" id="du-report" hidden><div class="report" id="du-report-body"></div><button style="width:100%;margin-top:6px" id="du-report-close">분석 닫기</button></div></div>'+
 '<button class="mini" id="du-expand">🏎️ 도파민 레이스</button>';
 document.body.appendChild(box);
 const q=s=>box.querySelector(s),autoUi=()=>document.getElementById('dopamine-auto-v336-ui');
 const press=id=>{const e=autoUi()?.querySelector('#'+id);if(!e)return false;e.click();return true;};
 const getA=()=>window.__duAuto?.state?.()||{}, getF=()=>window.__duFleet?.state?.()||{};
+
+/* Google Sheets uploader ported from the preexisting AUTO Loader v1.1.2.
+ * GM credentials are isolated per Tampermonkey script: one-time configuration required.
+ * Race events are read from the original game-origin localStorage; AUTO engine unchanged.
+ */
+const cloudUploader=(()=>{
+  const RUNS_KEY='dopamine-auto-v336:runs';
+  const CFG_URL='dopamine-uploader:url',CFG_KEY='dopamine-uploader:key',SENT_KEY='dopamine-uploader:sent';
+  const ENDPOINT_PATTERN=/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/;
+  let sending=false,retryAfter=0,message='초기화 중',lastSuccess='',timer=null,disposed=false;
+  const read=(k,fallback='')=>{try{return GM_getValue(k,fallback);}catch(_){return fallback;}};
+  const write=(k,v)=>GM_setValue(k,v);
+  const sentIds=()=>{try{const arr=JSON.parse(read(SENT_KEY,'[]'));return Array.isArray(arr)?arr:[];}catch(_){return [];}};
+  const state=()=>({message,sending,configured:!!(read(CFG_URL)&&read(CFG_KEY)),lastSuccess});
+  function report(msg){message=msg;const e=q('#du-cloud-state');if(e)e.textContent='☁ Google Sheets · '+msg;console.info('[Dopamine Unified] Sheets:',msg);}
+  function uploadPending(force=false){
+    if(disposed)return;
+    if(sending){if(force)report('전송 중 · 완료 후 자동 재확인');return;}
+    if(Date.now()<retryAfter&&!force)return;
+    const url=read(CFG_URL),key=read(CFG_KEY);
+    if(!url||!key||!ENDPOINT_PATTERN.test(url)){report('연결 설정 필요 · ⚙ → 시트 연결 설정');return;}
+    let runs;
+    try{runs=JSON.parse(localStorage.getItem(RUNS_KEY)||'[]');if(!Array.isArray(runs))throw Error('기록 형식 오류');}
+    catch(e){report('로컬 기록 읽기 실패 · '+String(e?.message||e));return;}
+    const sent=new Set(sentIds());
+    const pending=runs.filter(r=>r&&r.runId&&!sent.has(r.runId));
+    if(!pending.length){report('전송 완료 · 로컬 '+runs.length+'건 확인');return;}
+    const run=pending[0],body=JSON.stringify({uploadKey:key,run});
+    if(body.length>1800000){retryAfter=Date.now()+60000;report('기록 용량 초과 · '+run.runId);return;}
+    sending=true;report('전송 중 · 미전송 '+pending.length+'건 · '+run.runId);
+    try{GM_xmlhttpRequest({
+      method:'POST',url,
+      headers:{'Content-Type':'text/plain;charset=utf-8'},data:body,timeout:30000,
+      onload(response){
+        sending=false;if(disposed)return;
+        let result;try{result=JSON.parse(response.responseText||'');}catch(_){}
+        if(response.status>=200&&response.status<300&&result?.ok===true&&
+           (result.status==='SAVED'||result.status==='ALREADY_SAVED')&&result.runId===run.runId){
+          const ids=sentIds();if(!ids.includes(run.runId))ids.push(run.runId);
+          write(SENT_KEY,JSON.stringify(ids.slice(-1000)));
+          lastSuccess=run.runId;retryAfter=0;
+          report((result.status==='ALREADY_SAVED'?'기존 기록 확인':'저장 성공')+' · '+run.runId);
+          setTimeout(()=>uploadPending(),1000);
+        }else{retryAfter=Date.now()+60000;report('전송 실패 · '+(result?.status||'HTTP '+response.status)+' · 60초 후 재시도');}
+      },
+      onerror(){sending=false;retryAfter=Date.now()+60000;report('네트워크 오류 · 60초 후 재시도');},
+      ontimeout(){sending=false;retryAfter=Date.now()+60000;report('응답 시간 초과 · 60초 후 재시도');}
+    });}catch(e){sending=false;retryAfter=Date.now()+60000;report('전송 실행 오류 · '+String(e?.message||e));}
+  }
+  function configure(){
+    const previous=String(read(CFG_URL,'')||'');
+    const url=window.prompt('Google Apps Script 웹 앱 URL (/exec)을 입력하세요.',previous);
+    if(url===null)return;
+    const clean=url.trim();if(!ENDPOINT_PATTERN.test(clean)){window.alert('올바른 Apps Script /exec 주소가 아닙니다.');return;}
+    const keyRaw=window.prompt('UPLOAD_KEY를 입력하세요. 기존 통합판 연결 키를 유지하려면 빈칸으로 확인하세요.','');
+    if(keyRaw===null)return;
+    const key=keyRaw.trim()||String(read(CFG_KEY,'')||'');
+    if(!key){window.alert('UPLOAD_KEY를 입력하세요.');return;}
+    try{write(CFG_URL,clean);write(CFG_KEY,key);}catch(e){report('연결 정보 저장 실패 · '+String(e?.message||e));return;}
+    retryAfter=0;report('연결 정보 저장 · 미전송 기록 검사 중');uploadPending(true);
+  }
+  report(read(CFG_URL)&&read(CFG_KEY)?'연결됨 · 로컬 기록 검사 중':'연결 설정 필요 · ⚙ → 시트 연결 설정');
+  timer=setInterval(()=>uploadPending(),7000);
+  setTimeout(()=>uploadPending(),2500);
+  return {configure,retry:()=>{retryAfter=0;uploadPending(true);},state,destroy:()=>{disposed=true;clearInterval(timer);}};
+})();
 const fieldNames=[['brakeY','브레이크 판정선 Y'],['boostY','부스터 판정선 Y'],['brakeOffset','브레이크 보정 px'],['boostOffset','부스터 보정 px'],['predictionMs','예측 시간 ms'],['boostZones','부스터 구간 수'],['colorTolerance','색상 허용 오차'],['tolerance','판정 허용 오차']];
 let view='none',minimized=false,notice='',drag=null,moved=false;
 function settings(){const list=q('#du-settings');list.replaceChildren();const pl=document.createElement('label'),pi=document.createElement('input');pl.textContent='학습 프로필 (선택)';pi.type='text';pi.dataset.profile='yes';pi.value=autoUi()?.querySelector('#vehicleProfile')?.value??'';pl.appendChild(pi);list.appendChild(pl);for(const [id,title] of fieldNames){const label=document.createElement('label'),input=document.createElement('input');label.textContent=title;input.type='number';input.dataset.field=id;input.value=autoUi()?.querySelector('#'+id)?.value??'';label.appendChild(input);list.appendChild(label);}}
@@ -958,6 +1032,7 @@ q('#du-one').disabled=active||busy;q('#du-chain').disabled=active||busy;q('#du-s
 q('#du-race').hidden=view!=='race';q('#du-advanced').hidden=view!=='tools';q('#du-report').hidden=view!=='report';
 q('#du-race-status').textContent='코스: '+(a.courseName||'미확인')+'\n연속: '+(a.chainEnabled?a.chainState+' / '+a.chainRuns+'판':'대기')+'\nPERFECT '+(a.stats?.perfect||0)+' / GREAT '+(a.stats?.great||0);
 q('#du-status').textContent=(notice?notice+'\n':'')+(active?'AUTO 주행 중':'AUTO 대기')+(a.chainCounts?'\n타이어 H'+a.chainCounts.hard+' M'+a.chainCounts.medium+' S'+a.chainCounts.soft:'')+'\n'+(f.message||'차고 분석 대기');
+q('#du-cloud-state').textContent='☁ Google Sheets · '+cloudUploader.state().message;
 relocate();
 }
 q('#du-auto').onclick=()=>toggle('race');
@@ -975,6 +1050,8 @@ q('#du-defaults').onclick=()=>{if(getA().running||getA().chainEnabled)return say
 q('#du-save').onclick=()=>{if(getA().running||getA().chainEnabled)return say('주행 중 설정 변경 불가');const profileSource=q('#du-settings').querySelector('[data-profile]'),profileTarget=autoUi()?.querySelector('#vehicleProfile');if(profileSource&&profileTarget){profileTarget.value=profileSource.value;profileTarget.dispatchEvent(new Event('change',{bubbles:true}));}for(const el of q('#du-settings').querySelectorAll('[data-field]')){const target=autoUi()?.querySelector('#'+el.dataset.field);if(target){target.value=el.value;target.dispatchEvent(new Event('change',{bubbles:true}));}}press('save-btn');say('AUTO 설정 저장');};
 q('#du-export').onclick=()=>{window.__duFleet?.exportJson?.();say('차고 백업 다운로드 실행');};
 q('#du-trades').onclick=async()=>{await window.__duFleet?.captureTrades?.();render();};
+q('#du-cloud-config').onclick=()=>cloudUploader.configure();
+q('#du-cloud-retry').onclick=()=>cloudUploader.retry();
 function minimize(v){minimized=v;q('.panel').style.display=v?'none':'block';q('#du-expand').style.display=v?'block':'none';position();}
 q('#du-min').onclick=()=>minimize(true);q('#du-expand').onclick=()=>{if(moved){moved=false;return;}minimize(false);};
 const posKey='dopamine-unified-position-v1';let x=Math.max(8,innerWidth-270),y=Math.max(8,innerHeight-160);
@@ -989,7 +1066,7 @@ h.addEventListener('pointercancel',()=>{drag=null;});
 }
 window.addEventListener('resize',position);
 const timer=setInterval(()=>{render();position();},750);
-window.__dopamineUnifiedControl={active:true,destroy:()=>{clearInterval(timer);box.remove();window.__dopamineUnifiedControl=null;}};
+window.__dopamineUnifiedControl={active:true,destroy:()=>{clearInterval(timer);cloudUploader.destroy();box.remove();window.__dopamineUnifiedControl=null;}};
 render();position();
 
 })();
