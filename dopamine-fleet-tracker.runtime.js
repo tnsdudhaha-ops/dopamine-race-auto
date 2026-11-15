@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.24 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.25 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.24';
+  const VERSION = '1.1.25';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -294,6 +294,12 @@
     const price=t.match(/⚡\s*([\d,]+)/);
     return {type,screen,seller,buyer,model,stars:Number(stars[1]),price:price?Number(price[1].replace(/,/g,'')):null,occurredAt:time?time[1]:null,raw:t,observedAt:date()};
   }
+  function classifyFeedItem(item) {
+    const raw=String(item.raw||'');
+    if(item.screen!=='전체 공지') return 'vehicle';
+    if(/차량출고|출고!|거래\s*성사|쿨거래|블로저/.test(raw)&&/★\s*[1-5]/.test(raw))return 'vehicle';
+    return 'other';
+  }
   function tradeScrollContainer(container) {
     const nodes=[container,...container.querySelectorAll('*')].filter(el=>el!==root&&!root.contains(el));
     return nodes.filter(el=>{
@@ -327,7 +333,7 @@
           if(stable>=2&&scroll.scrollTop+scroll.clientHeight>=scroll.scrollHeight-5){complete=true;break;}
         }
       }
-      let added=0,skipped=0,rawAdded=0,parsedAdded=0;
+      let added=0,skipped=0,rawAdded=0,parsedAdded=0,vehicleCount=0,otherCount=0;
       for(const raw of found){
         let item=parseTradeEntry(raw,screen.type);
         if(!item) {
@@ -337,14 +343,17 @@
           item={type:'unparsed',screen:screen.type,seller:null,buyer:null,model:null,stars:null,price:null,
             occurredAt:tm?tm[1]:null,raw:t,parsed:false,observedAt:date()};
         } else {item.parsed=true;}
+        item.category=classifyFeedItem(item);
         const key='feed|'+screen.type+'|'+clean(raw);
         if(db.seen.includes(key))continue;
         db.seen.push(key);db.transactions.push(item);added++;
         if(item.parsed)parsedAdded++;else rawAdded++;
+        if(item.category==='vehicle')vehicleCount++;else otherCount++;
       }
+      for(const item of db.transactions)if(!item.category)item.category=classifyFeedItem(item);
       db.seen=db.seen.slice(-6000);db.transactions=db.transactions.slice(-4000);
       save();
-      if(added||!silent)note(screen.type+': 신규 '+added+'건 (해석 '+parsedAdded+' / 원문 보관 '+rawAdded+') / 누적 '+db.transactions.length+'건'+(complete?' (끝까지 확인)':' (일부만 확인)'));
+      if(added||!silent)note(screen.type+': 신규 '+added+'건 (차량 관련 '+vehicleCount+' / 기타 '+otherCount+' / 구조화 '+parsedAdded+' / 원문 '+rawAdded+') / 누적 '+db.transactions.length+'건'+(complete?' (끝까지 확인)':' (일부만 확인)'));
     }catch(e){if(!silent)note('거래 수집 오류: '+String(e.message||e));}
     finally{if(scroll&&scroll.isConnected)scroll.scrollTop=oldTop;tradeCollecting=false;}
   }
