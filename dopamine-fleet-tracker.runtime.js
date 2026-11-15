@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.9 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.10 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.9';
+  const VERSION = '1.1.10';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -34,20 +34,22 @@
   }
   function panel() {
     const all=panels();
-    const matches=all.filter(e=>/보유\\s*차량|최고\\s*★|차고/.test(e.innerText||''));
-    return (matches.length?matches:all).sort((a,b)=>(b.innerText||'').length-(a.innerText||'').length)[0]||null;
+    const candidates=all.filter(e=>/차고|보유\s*차량|최고\s*★/.test(e.innerText||''));
+    const pool=candidates.length?candidates:all;
+    return pool.sort((a,b)=>(b.innerText||'').length-(a.innerText||'').length)[0]||null;
   }
   function detectOwner(p) {
-    if (!p) return null;
-    const names=[...USERS,...Object.keys(ALIASES)];
-    const candidates=[p,...p.querySelectorAll('h1,h2,h3,h4,[class*="title"],[class*="header"]')];
-    for(const el of candidates) {
-      const t=clean(el.innerText||'').slice(0,1200);
-      for(const name of names) {
-        if(t.includes(name+'의 차고')||t.includes(name+' 차고')||t.includes(name+'님 차고')) return who(name);
-      }
+    if(!p) return null;
+    const t=clean(p.innerText||'');
+    const names=[...Object.keys(ALIASES),...USERS].sort((a,b)=>b.length-a.length);
+    for(const name of names) {
+      if(t.includes(name+'의 차고')||t.includes(name+' 차고')||t.includes(name+'님 차고')) return who(name);
     }
     return null;
+  }
+  function activeGaragePanel() {
+    const matches=panels().filter(e=>/보유\s*차량|최고\s*★/.test(e.innerText||''));
+    return matches.sort((a,b)=>(b.innerText||'').length-(a.innerText||'').length)[0]||panel();
   }
   function expectedTotal(p) {
     const m=(p?.innerText||'').match(/보유차량\s*[·•:]?\s*(\d+)\s*대/);
@@ -104,7 +106,7 @@
   }
   async function captureGarage(silent=false) {
     if (collecting) return;
-    const p = panel();
+    const p = activeGaragePanel();
     const actual = detectOwner(p);
     if (!p) { if (!silent) note('차고 팝업을 찾지 못했습니다.'); return; }
     if (!actual) { if (!silent) note('차고 소유주 미인식: 차고 제목이 보이게 캡처해 주세요. 다른 참가자 기록은 보호합니다.'); return; }
@@ -238,8 +240,8 @@
     setInterval(relocateOverlay,500);
     setInterval(()=>{
       if (!db.settings.auto) return;
-      const p=panel(),u=detectOwner(p);
-      if (u) {selected=u;captureGarage(true);}
+      const p=activeGaragePanel(),u=detectOwner(p);
+      if (u) {selected=u;render();captureGarage(true);}
       else captureTrades(true);
     },60000);
   }
