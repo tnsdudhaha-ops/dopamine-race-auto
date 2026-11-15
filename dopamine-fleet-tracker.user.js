@@ -1,18 +1,19 @@
 // ==UserScript==
 // @name         도파민레이스 차량 추적기
 // @namespace    local.dopamine.fleet
-// @version      2.0.0
+// @version      2.1.0
 // @description  Bootstrap: 게임 페이지를 열 때마다 GitHub 최신 차량 추적기 실행
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-fleet-tracker.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-fleet-tracker.user.js
+// @connect      api.github.com
 // @connect      raw.githubusercontent.com
 // @grant        GM_xmlhttpRequest
 // @run-at       document-idle
 // ==/UserScript==
 (function () {
   'use strict';
-  const RUNTIME = 'https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-fleet-tracker.runtime.js';
+  const API = 'https://api.github.com/repos/tnsdudhaha-ops/dopamine-race-auto/contents/dopamine-fleet-tracker.runtime.js?ref=main';
   const CACHE = 'dopamine-fleet-tracker:bootstrap-runtime-v2';
   function status(message) {
     let box = document.getElementById('dft-bootstrap-status');
@@ -43,21 +44,23 @@
     status('🚗 GitHub 최신 차량 추적기 확인 중…');
     GM_xmlhttpRequest({
       method:'GET',
-      url:RUNTIME+'?t='+Date.now(),
-      headers:{'Cache-Control':'no-cache'},
-      timeout:12000,
+      url:API+'&_='+Date.now(),
+      headers:{'Accept':'application/vnd.github+json','Cache-Control':'no-cache'},
+      timeout:15000,
       onload(response) {
-        if (response.status !== 200) {fallback('HTTP '+response.status);return;}
+        if (response.status !== 200) {fallback('GitHub API HTTP '+response.status);return;}
         try {
-          const source=response.responseText;
-          // Check syntax before storing the last-known-good runtime.
+          const data=JSON.parse(response.responseText);
+          if (data.encoding!=='base64'||typeof data.content!=='string') throw new Error('GitHub API 응답 형식 오류');
+          const bytes=Uint8Array.from(atob(data.content.replace(/\\s/g,'')),c=>c.charCodeAt(0));
+          const source=new TextDecoder('utf-8').decode(bytes);
           new Function(source);
           run(source,false);
-          try {localStorage.setItem(CACHE,source);} catch (e) { /* cache optional */ }
-        } catch(e) {fallback(String(e.message || e));}
+          try {localStorage.setItem(CACHE,source);} catch(e) {}
+        } catch(e) {fallback('최신 실행 코드 오류: '+String(e.message||e));}
       },
-      onerror() {fallback('네트워크 오류');},
-      ontimeout() {fallback('요청 시간 초과');}
+      onerror() {fallback('GitHub API 연결 오류');},
+      ontimeout() {fallback('GitHub API 응답 시간 초과');}
     });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',load,{once:true});
