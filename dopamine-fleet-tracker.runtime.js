@@ -1,10 +1,10 @@
-// Dopamine Fleet Tracker runtime v1.1.15 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.16 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.15';
+  const VERSION = '1.1.16';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
-  const ALIASES = {'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
+  const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
   if (document.getElementById('dft-root')) return;
   let db;
   try { db = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (_) { db = {}; }
@@ -37,6 +37,17 @@
     const names=[...Object.keys(ALIASES),...USERS].sort((a,b)=>b.length-a.length);
     for(const name of names) {
       if(t.includes(name+'의차고')||t.includes(name+'차고')) return who(name);
+    }
+    return null;
+  }
+  function currentGarageOwner() {
+    const titles=[...document.querySelectorAll('h1,h2,h3,h4,header,[class*="title"],[class*="Title"],[class*="header"],[class*="Header"]')]
+      .filter(el=>el.getClientRects().length);
+    for(const el of titles) {
+      const t=(el.textContent||'').trim();
+      if(t.length>120) continue;
+      const owner=garageOwnerFromText(t);
+      if(owner) return owner;
     }
     return null;
   }
@@ -139,10 +150,10 @@
   async function captureGarage(silent=false) {
     if (collecting) return;
     const p = activeGaragePanel();
-    const actual = detectOwner(p);
+    const actual = currentGarageOwner() || detectOwner(p);
     if (!p) { if (!silent) note('차고 팝업을 찾지 못했습니다.'); return; }
     if (!actual) { if (!silent) note('차고 소유주 미인식: 차고 제목이 보이게 캡처해 주세요. 다른 참가자 기록은 보호합니다.'); return; }
-    if (actual !== selected && !silent) { note('현재 차고는 '+actual+'입니다. 참가자 선택을 확인하세요.'); return; }
+    if (actual !== selected) { selected=actual; render(); }
     collecting = true;
     const scroll = scrollContainer(p);
     const oldTop = scroll ? scroll.scrollTop : 0;
@@ -274,10 +285,10 @@
     root.style.setProperty('z-index','2147483647','important');
     root.style.setProperty('display','block','important');
     render();
-    setInterval(relocateOverlay,500);
+    setInterval(()=>{relocateOverlay();const u=currentGarageOwner();if(u&&u!==selected){selected=u;message=u+' 차고 인식됨';render();}},500);
     setInterval(()=>{
       if (!db.settings.auto) return;
-      const p=activeGaragePanel(),u=detectOwner(p);
+      const p=activeGaragePanel(),u=currentGarageOwner()||detectOwner(p);
       if (u) {selected=u;render();captureGarage(true);}
       else captureTrades(true);
     },60000);
