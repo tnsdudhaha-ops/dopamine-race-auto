@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민레이스 차량 추적기
 // @namespace    local.dopamine.fleet
-// @version      1.1.0
+// @version      1.1.1
 // @description  AUTO와 독립: 표시된 차고/장터 기록 추적, 변경 이력 및 JSON 백업
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-fleet-tracker.user.js
@@ -11,7 +11,7 @@
 // ==/UserScript==
 (()=>{
 'use strict';
-const VERSION='1.1.0',KEY='dopamine-fleet-tracker-v1',USERS=['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
+const VERSION='1.1.1',KEY='dopamine-fleet-tracker-v1',USERS=['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
 const ALIAS={'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
 if(window.__dopamineFleetTracker) return;
 window.__dopamineFleetTracker=true;
@@ -19,7 +19,7 @@ let db;try{db=JSON.parse(localStorage.getItem(KEY)||'{}')}catch{db={}}
 db={version:1,garages:{},snapshots:[],transactions:[],events:[],seen:[],settings:{auto:true,interval:60},...db};
 let selected='ㅇ발',message='현재 표시된 차고에서 참가자를 확인한 뒤 저장하세요.',lastFingerprint='';
 const $=s=>document.querySelector(s),norm=s=>String(s||'').replace(/\s+/g,' ').trim(),owner=s=>ALIAS[norm(s)]||norm(s),stamp=()=>new Date().toISOString(),save=()=>localStorage.setItem(KEY,JSON.stringify(db));
-function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':c==='"'?'&quot;':'&#39;');}
 function candidates(){return [...document.querySelectorAll('[role="dialog"],[aria-modal="true"],[class*="modal"],[class*="Modal"]')].filter(e=>e.getClientRects().length&&!e.closest('#dft-root'));}
 function activePanel(){let c=candidates();return c.sort((a,b)=>a.innerText.length-b.innerText.length)[0]||null;}
 function detectOwner(panel){let t=norm(panel?.innerText||'').slice(0,160);for(let u of USERS){if(t.includes(u+'의 차고')||t.includes(u+' 차고'))return u;}for(let [name,u] of Object.entries(ALIAS)){if(t.includes(name+'의 차고')||t.includes(name+' 차고'))return u;}return null;}
