@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.21 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.22 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.21';
+  const VERSION = '1.1.22';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -226,27 +226,79 @@
       collecting = false;
     }
   }
+  function tradeScreen() {
+    const titlePatterns=['전체 공지','유저장터 거래현황 전체보기','딜러 매입 현황 전체보기'];
+    const headings=[...document.querySelectorAll('h1,h2,h3,h4,div,span,strong')].filter(e=>{
+      if(e===root||root.contains(e)||!e.getClientRects().length) return false;
+      const t=(e.textContent||'').trim();
+      return t.length<40&&titlePatterns.some(x=>t===x);
+    }).sort((a,b)=>(a.textContent||'').length-(b.textContent||'').length);
+    for(const h of headings) {
+      const title=(h.textContent||'').trim();
+      let node=h;
+      for(let i=0;i<12&&node.parentElement;i++){
+        node=node.parentElement;
+        const t=node.innerText||'';
+        if(t.length>200000) break;
+        if(/26\.\d{2}\.\d{2}\.|거래 완료|차량출고|매입/.test(t)&&t.length>80) return {type:title,container:node};
+      }
+    }
+    return null;
+  }
+  function tradeRows(container) {
+    const all=[...container.querySelectorAll('div,li,article,section')].filter(el=>el!==root&&!root.contains(el));
+    const isEntry=t=>/(\d{2}\.\d{2}\.\d{2}\.\s*\d{2}:\d{2})/.test(t)&&
+      /(차량출고|거래 완료|매입|출고|성사)/.test(t);
+    const rows=[];
+    for(const el of all){
+      const t=(el.innerText||'').trim();
+      if(t.length<20||t.length>600||!isEntry(t)) continue;
+      if([...el.children].some(ch=>{const ct=(ch.innerText||'').trim();return ct.length>=20&&isEntry(ct)})) continue;
+      rows.push(t);
+    }
+    return [...new Set(rows)];
+  }
+  function parseTradeEntry(raw,screen) {
+    const t=clean(raw);
+    const time=t.match(/(\d{2}\.\d{2}\.\d{2}\.\s*\d{2}:\d{2})/);
+    const names='그레이트|픸홀|픽홀|핔홀|핗홀|참돔|킹황|갱서|ㅇ발|○발|◯발|〇발|구레긔|피콜로|ㅇ샘|영감|톩끼';
+    const pair=t.match(new RegExp('('+names+')\\s*(?:→|->)\\s*('+names+')'));
+    const seller=t.match(new RegExp('('+names+')\\s*의\\s*'));
+    const shipment=t.match(new RegExp('('+names+')\\s*[,，]\\s*'));
+    const stars=t.match(/★\s*([1-5])/);
+    const price=t.match(/(?:⚡|ERS?\s*)\s*([\d,]+)\s*(?:에\s*매입|매입|$)/i);
+    let type=screen==='유저장터 거래현황 전체보기'?'market':screen==='딜러 매입 현황 전체보기'?'dealer':'notice';
+    if(type==='notice') {
+      if(/차량출고/.test(t)) type='shipment';
+      else if(/초롱이|거래 성사/.test(t)) type='dealer_notice';
+      else return null;
+    }
+    const actor=pair?pair[1]:(seller?seller[1]:(shipment?shipment[1]:null));
+    const recipient=pair?pair[2]:null;
+    const marker=t.search(/(?:→|->|출고!|출고|의\s)/);
+    const modelMatch=t.match(/(?:→\s*(?:\S+)\s*[·:]\s*|출고!?\s*[·:]\s*|의\s*)([^★⚡]+?)\s*★\s*[1-5]/);
+    const model=modelMatch?clean(modelMatch[1]).replace(/^[·:]\s*/,''):null;
+    if(!actor||!stars||!model) return null;
+    return {type,screen,seller:who(actor),buyer:recipient?who(recipient):null,model,stars:Number(stars[1]),price:price?Number(price[1].replace(/,/g,'')):null,occurredAt:time?time[1]:null,raw:t,observedAt:date()};
+  }
   function captureTrades(silent=false) {
-    const p = panel();
-    if (!p || !/거래|장터/.test(p.innerText || '')) { if (!silent) note('거래 내역 팝업을 열어주세요.'); return; }
-    const rows = [...p.querySelectorAll('tr,li,[class*="trade"],[class*="history"]')];
-    let added = 0;
-    for (const el of rows) {
-      const t = clean(el.innerText);
-      if (t.length < 10 || t.length > 400) continue;
-      const pair = t.match(/(그레이트|픽홀|참돔|킹황|갱서|ㅇ발|구레긔|피콜로|ㅇ샘|영감|톩끼)\s*(?:→|->)\s*(그레이트|픽홀|참돔|킹황|갱서|ㅇ발|구레긔|피콜로|ㅇ샘|영감|톩끼)/);
-      const price = t.match(/([\d,]+)\s*E\b/i);
-      if (!pair || !price) continue;
-      const key = t.replace(/\s+/g,'');
-      if (db.seen.includes(key)) continue;
+    const screen=tradeScreen();
+    if(!screen){if(!silent) note('전체 공지 / 유저장터 거래현황 / 딜러 매입 현황 화면을 열어주세요.');return;}
+    const rows=tradeRows(screen.container);
+    let added=0,skipped=0;
+    for(const raw of rows){
+      const item=parseTradeEntry(raw,screen.type);
+      if(!item){skipped++;continue;}
+      const key=[item.type,item.occurredAt,item.seller,item.buyer,item.model,item.stars,item.price].join('|');
+      if(db.seen.includes(key)) continue;
       db.seen.push(key);
-      db.transactions.push({seller:who(pair[1]),buyer:who(pair[2]),price:Number(price[1].replace(/,/g,'')),barter:price[1]==='1',raw:t,observedAt:date()});
+      db.transactions.push(item);
       added++;
     }
-    db.seen = db.seen.slice(-3000);
-    db.transactions = db.transactions.slice(-2000);
+    db.seen=db.seen.slice(-6000);
+    db.transactions=db.transactions.slice(-4000);
     save();
-    if (added || !silent) note('거래 신규 '+added+'건 / 누적 '+db.transactions.length+'건');
+    if(added||!silent) note(screen.type+': 신규 '+added+'건 / 분석 제외 '+skipped+'건 / 누적 '+db.transactions.length+'건 (현재 표시된 내역만)');
   }
   function exportJson() {
     const blob = new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
