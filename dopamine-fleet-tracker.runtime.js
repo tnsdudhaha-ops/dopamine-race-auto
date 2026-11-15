@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.25 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.26 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.25';
+  const VERSION = '1.1.26';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -266,8 +266,8 @@
     const stars=t.match(/★\s*([1-5])/);
     let type=screen==='유저장터 거래현황 전체보기'?'market':screen==='딜러 매입 현황 전체보기'?'dealer':'notice';
     if(type==='notice') {
-      if(/차량출고/.test(t)) type='shipment';
-      else if(/초롱이|거래 성사/.test(t)) type='dealer_notice';
+      if(/차량\s*출고|출고!/.test(t)) type='shipment';
+      else if(/초롱이|거래\s*성사/.test(t)) type='dealer_notice';
       else return null;
     }
     let seller=null,buyer=null,model=null;
@@ -279,20 +279,31 @@
       const m=t.match(new RegExp('('+names+')\\s*의\\s*(.+?)\\s*★\\s*[1-5]'));
       if(m){seller=who(m[1]);model=m[2];}
     } else if(type==='shipment') {
+      // Notice text: "픽홀, 제네시스 G70 출고! · ★1".
       const m=t.match(new RegExp('('+names+')\\s*[,，]\\s*(.+?)\\s*출고!?\\s*[·:]?\\s*★\\s*[1-5]'));
       if(m){seller=who(m[1]);model=m[2];}
-      if(!m) {
-        const alt=t.match(new RegExp('('+names+')\\s*[,，]\\s*(.+?)\\s*출고'));
-        if(alt){seller=who(alt[1]);model=alt[2];}
-      }
     } else if(type==='dealer_notice') {
       const m=t.match(new RegExp('('+names+')\\s*[,，]\\s*원치\\s*않은\\s*쿨거래\\s*성사!?\\s*(.+?)\\s*⚡'));
       if(m){seller=who(m[1]);model=m[2];}
     }
-    if(!seller||!model||!stars) return null;
+    if(!seller||!model||!stars)return null;
     model=clean(model).replace(/^[·:]\s*/,'').replace(/[!·:]\s*$/,'');
     const price=t.match(/⚡\s*([\d,]+)/);
-    return {type,screen,seller,buyer,model,stars:Number(stars[1]),price:price?Number(price[1].replace(/,/g,'')):null,occurredAt:time?time[1]:null,raw:t,observedAt:date()};
+    return {type,screen,seller,buyer,model,stars:Number(stars[1]),price:price?Number(price[1].replace(/,/g,'')):null,occurredAt:time?time[1]:null,raw:t,observedAt:date(),parsed:true};
+  }
+  function reparseStoredTrades() {
+    let updated=0;
+    for(const old of db.transactions){
+      if(old.parsed||!old.raw||!old.screen)continue;
+      const parsed=parseTradeEntry(old.raw,old.screen);
+      if(parsed){
+        Object.assign(old,parsed,{observedAt:old.observedAt||parsed.observedAt});
+        updated++;
+      }
+      old.category=classifyFeedItem(old);
+    }
+    if(updated)save();
+    return updated;
   }
   function classifyFeedItem(item) {
     const raw=String(item.raw||'');
@@ -333,6 +344,7 @@
           if(stable>=2&&scroll.scrollTop+scroll.clientHeight>=scroll.scrollHeight-5){complete=true;break;}
         }
       }
+      const reparsed=reparseStoredTrades();
       let added=0,skipped=0,rawAdded=0,parsedAdded=0,vehicleCount=0,otherCount=0;
       for(const raw of found){
         let item=parseTradeEntry(raw,screen.type);
@@ -353,7 +365,7 @@
       for(const item of db.transactions)if(!item.category)item.category=classifyFeedItem(item);
       db.seen=db.seen.slice(-6000);db.transactions=db.transactions.slice(-4000);
       save();
-      if(added||!silent)note(screen.type+': 신규 '+added+'건 (차량 관련 '+vehicleCount+' / 기타 '+otherCount+' / 구조화 '+parsedAdded+' / 원문 '+rawAdded+') / 누적 '+db.transactions.length+'건'+(complete?' (끝까지 확인)':' (일부만 확인)'));
+      if(added||!silent)note(screen.type+': 신규 '+added+'건 (차량 관련 '+vehicleCount+' / 기타 '+otherCount+' / 신규 구조화 '+parsedAdded+' / 기존 재분석 '+reparsed+' / 원문 '+rawAdded+') / 누적 '+db.transactions.length+'건'+(complete?' (끝까지 확인)':' (일부만 확인)'));
     }catch(e){if(!silent)note('거래 수집 오류: '+String(e.message||e));}
     finally{if(scroll&&scroll.isConnected)scroll.scrollTop=oldTop;tradeCollecting=false;}
   }
