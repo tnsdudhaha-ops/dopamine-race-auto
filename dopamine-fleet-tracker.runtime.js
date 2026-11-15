@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.7 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.8 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.7';
+  const VERSION = '1.1.8';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -34,12 +34,12 @@
   }
   function panel() {
     const all = panels().sort((a,b) => (a.innerText || '').length - (b.innerText || '').length);
-    return all[0] || null;
+    return all.find(e=>/보유\s*차량|최고\s*★|차고/.test(e.innerText||'')) || all[0] || null;
   }
   function detectOwner(p) {
-    const t = clean(p && p.innerText).slice(0,250);
-    for (const u of USERS) if (t.includes(u+'의 차고') || t.includes(u+' 차고')) return u;
-    for (const [a,u] of Object.entries(ALIASES)) if (t.includes(a+'의 차고') || t.includes(a+' 차고')) return u;
+    const t = clean(p && p.innerText).slice(0,1000);
+    for (const u of USERS) if (t.includes(u+'의 차고') || t.includes(u+' 차고') || t.includes(u+'님 차고') || t.includes('차고 · '+u)) return u;
+    for (const [a,u] of Object.entries(ALIASES)) if (t.includes(a+'의 차고') || t.includes(a+' 차고') || t.includes(a+'님 차고') || t.includes('차고 · '+a)) return u;
     return null;
   }
   function expectedTotal(p) {
@@ -51,15 +51,15 @@
     const items=[];
     for (const el of p.querySelectorAll('div,li,article')) {
       const t=el.innerText||'';
-      if (!/최고\s*★\s*[1-5]/.test(t) || t.length>300) continue;
-      if ([...el.children].some(ch=>/최고\s*★\s*[1-5]/.test(ch.innerText||''))) continue;
+      if (!/최고\s*★\s*[1-5]/.test(t) || t.length>900) continue;
+      if ([...el.children].some(ch=>/최고\s*★\s*[1-5]/.test(ch.innerText||'') && /(?:^|\s)(SSR|SR|S|R)(?=\s|$)/.test(ch.innerText||''))) continue;
       const grade=t.match(/(?:^|\s)(SSR|SR|S|R)(?=\s|$)/);
       const summary=t.match(/최고\s*★\s*([1-5])\s*[·•]?\s*(\d+)\s*대/);
       if (!grade||!summary) continue;
       const lines=t.split('\n').map(clean).filter(Boolean);
       const ix=lines.findIndex(x=>/최고\s*★/.test(x));
       if (ix<1) continue;
-      let nameParts=lines.slice(Math.max(0,ix-3),ix).filter(x=>
+      let nameParts=lines.slice(Math.max(0,ix-6),ix).filter(x=>
         !/^(SSR|SR|S|R)$/.test(x) &&
         !/^ERS|^⚡|^탑승중$|^최고\s*★|^\d+성\s*[×x]\s*\d+/.test(x) &&
         !/^(\d+\s*RP|\d+\s*E)$/.test(x)
@@ -100,7 +100,7 @@
     const p = panel();
     const actual = detectOwner(p);
     if (!p) { if (!silent) note('차고 팝업을 찾지 못했습니다.'); return; }
-    if (!actual) { if (!silent) note('차고 소유자를 인식하지 못했습니다. 잘못된 참가자에게 저장하지 않습니다.'); return; }
+    if (!actual) { if (!silent) note('차고 소유주 미인식: 차고 제목이 보이게 캡처해 주세요. 다른 참가자 기록은 보호합니다.'); return; }
     if (actual !== selected && !silent) { note('현재 차고는 '+actual+'입니다. 참가자 선택을 확인하세요.'); return; }
     collecting = true;
     const scroll = scrollContainer(p);
