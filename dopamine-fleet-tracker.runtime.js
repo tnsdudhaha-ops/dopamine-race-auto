@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.10 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.11 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.10';
+  const VERSION = '1.1.11';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -40,10 +40,14 @@
   }
   function detectOwner(p) {
     if(!p) return null;
-    const t=clean(p.innerText||'');
     const names=[...Object.keys(ALIASES),...USERS].sort((a,b)=>b.length-a.length);
-    for(const name of names) {
-      if(t.includes(name+'의 차고')||t.includes(name+' 차고')||t.includes(name+'님 차고')) return who(name);
+    const headers=[...p.querySelectorAll('h1,h2,h3,h4,[class*=title],[class*=Title],[class*=header],[class*=Header]')];
+    const texts=[...headers.map(el=>el.textContent||''),p.textContent||'',p.innerText||''];
+    for(const raw of texts) {
+      const t=String(raw).replace(/\s+/g,'').replace(/[🏁🏎️🚗]/g,'');
+      for(const name of names) {
+        if(t.includes(name+'의차고')||t.includes(name+'차고')||t.includes('차고:'+name)) return who(name);
+      }
     }
     return null;
   }
@@ -219,7 +223,7 @@
   }
   function relocateOverlay() {
     const candidates = panels();
-    const garage = candidates.find(e => /(?:의\s*차고|보유차량)/.test(e.innerText || ''));
+    const garage = candidates.find(e => /(?:의\s*차고|보유\s*차량)/.test(e.textContent || ''));
     const trade = candidates.find(e => /(?:거래|장터)/.test(e.innerText || ''));
     const target = garage || trade || null;
     // Dialogs promoted to the browser top layer cover even max-z-index body elements.
