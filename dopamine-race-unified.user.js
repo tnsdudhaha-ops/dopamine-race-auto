@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민 레이스 통합 컨트롤
 // @namespace    dopamine-race-unified
-// @version      1.0.0
+// @version      1.0.1
 // @description  AUTO Release 3.0 v3.3.20 + 차량 분석기 Release 1.0 / 기존 주행 계산 보존
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-unified.user.js
@@ -922,7 +922,7 @@ if(autoRoot)autoRoot.style.setProperty('display','none','important');
 const box=document.createElement('div');box.id='du-integrated';
 box.innerHTML='<style>'+
 '#du-integrated *{box-sizing:border-box}#du-integrated{font:12px/1.45 system-ui,sans-serif;color:#e9f3ff}'+
-'#du-integrated .panel{width:256px;max-width:calc(100vw - 16px);background:#152337;border:1px solid #667b91;border-radius:12px;padding:9px;box-shadow:0 7px 28px #0009}'+
+'#du-integrated .panel{width:256px;max-width:calc(100vw - 16px);background:#152337;border:1px solid #667b91;border-radius:12px;padding:9px;box-shadow:0 7px 28px #0009;max-height:calc(100vh - 16px);overflow-y:auto}'+
 '#du-integrated button{border:0;border-radius:6px;color:white;background:#38536e;padding:8px 5px;font:700 11px system-ui,sans-serif;cursor:pointer}'+
 '#du-integrated button:disabled{opacity:.45;cursor:not-allowed}#du-integrated .head{display:flex;justify-content:space-between;align-items:center;gap:5px;touch-action:none;margin-bottom:8px;cursor:move}'+
 '#du-integrated .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}#du-integrated .primary{min-height:47px;font-size:12px;background:#235d72}#du-integrated #du-auto{background:#166b44}'+
@@ -931,11 +931,11 @@ box.innerHTML='<style>'+
 '#du-integrated label{display:block;font-size:10px;margin-top:5px}#du-integrated input{width:100%;padding:5px;background:#102034;border:1px solid #6c839d;border-radius:5px;color:#fff}'+
 '#du-integrated .settings{max-height:210px;overflow:auto}#du-integrated .mini{display:none;border:1px solid #71869c;background:#192e45;border-radius:22px;padding:10px 14px}'+
 '</style>'+
-'<div class="panel"><div class="head"><strong>🏎️ 도파민 레이스 <small style="color:#b3c8db">통합 v1.0</small></strong><div><button id="du-tools">⚙</button> <button id="du-min">−</button></div></div>'+
+'<div class="panel"><div class="head"><strong>🏎️ 도파민 레이스 <small style="color:#b3c8db">통합 v1.0.1</small></strong><div><button id="du-tools">⚙</button> <button id="du-min">−</button></div></div>'+
 '<div class="grid"><button class="primary" id="du-auto">▶ AUTO 주행</button><button class="primary" id="du-garage">🚗 차고 갱신</button></div>'+
 '<div class="status" id="du-status">초기화 중…</div>'+
 '<div class="section" id="du-race" hidden><div class="grid"><button id="du-one">▶ 1판 시작</button><button id="du-chain">🔁 타이어 모두</button><button id="du-stop" style="background:#a5313e">■ 중지</button><button id="du-analyze">📊 주행 분석</button></div><div class="status" id="du-race-status"></div></div>'+
-'<div class="section" id="du-advanced" hidden><div class="grid"><button id="du-log">📋 입력 기록 복사</button><button id="du-json">💾 누적 JSON 저장</button><button id="du-detect">🔍 차량 다시 읽기</button><button id="du-defaults">↩ 설정 초기화</button><button id="du-export">📥 차고 백업</button><button id="du-trades">🧾 거래 기록 수집</button></div><div class="settings" id="du-settings"></div><button style="width:100%;margin-top:6px" id="du-save">⚙ AUTO 설정 저장</button></div>'+
+'<div class="section" id="du-advanced" hidden><div class="grid"><button id="du-log">📋 입력 기록 복사</button><button id="du-copy-analysis">📋 누적 분석 복사</button><button id="du-json">💾 누적 JSON 저장</button><button id="du-detect">🔍 차량 다시 읽기</button><button id="du-defaults">↩ 설정 초기화</button><button id="du-export">📥 차고 백업</button><button id="du-trades">🧾 거래 기록 수집</button></div><div class="settings" id="du-settings"></div><button style="width:100%;margin-top:6px" id="du-save">⚙ AUTO 설정 저장</button></div>'+
 '<div class="section" id="du-report" hidden><div class="report" id="du-report-body"></div><button style="width:100%;margin-top:6px" id="du-report-close">분석 닫기</button></div></div>'+
 '<button class="mini" id="du-expand">🏎️ 도파민 레이스</button>';
 document.body.appendChild(box);
@@ -944,7 +944,7 @@ const press=id=>{const e=autoUi()?.querySelector('#'+id);if(!e)return false;e.cl
 const getA=()=>window.__duAuto?.state?.()||{}, getF=()=>window.__duFleet?.state?.()||{};
 const fieldNames=[['brakeY','브레이크 판정선 Y'],['boostY','부스터 판정선 Y'],['brakeOffset','브레이크 보정 px'],['boostOffset','부스터 보정 px'],['predictionMs','예측 시간 ms'],['boostZones','부스터 구간 수'],['colorTolerance','색상 허용 오차'],['tolerance','판정 허용 오차']];
 let view='none',minimized=false,notice='',drag=null,moved=false;
-function settings(){const list=q('#du-settings');list.replaceChildren();for(const [id,title] of fieldNames){const label=document.createElement('label'),input=document.createElement('input');label.textContent=title;input.type='number';input.dataset.field=id;input.value=autoUi()?.querySelector('#'+id)?.value??'';label.appendChild(input);list.appendChild(label);}}
+function settings(){const list=q('#du-settings');list.replaceChildren();const pl=document.createElement('label'),pi=document.createElement('input');pl.textContent='학습 프로필 (선택)';pi.type='text';pi.dataset.profile='yes';pi.value=autoUi()?.querySelector('#vehicleProfile')?.value??'';pl.appendChild(pi);list.appendChild(pl);for(const [id,title] of fieldNames){const label=document.createElement('label'),input=document.createElement('input');label.textContent=title;input.type='number';input.dataset.field=id;input.value=autoUi()?.querySelector('#'+id)?.value??'';label.appendChild(input);list.appendChild(label);}}
 function analysis(){press('analysis-refresh');q('#du-report-body').textContent=autoUi()?.querySelector('#analysis-summary')?.textContent||'저장된 주행 기록이 없습니다.';}
 function toggle(name){view=view===name?'none':name;if(view==='tools')settings();if(view==='report')analysis();render();position();}
 function say(m){notice=m;render();}
@@ -968,10 +968,11 @@ q('#du-stop').onclick=()=>{press('stop-btn');say('중지 버튼 전달 완료');
 q('#du-garage').onclick=async()=>{if(getA().running||getA().chainEnabled)return say('주행 중 차고 갱신 불가');const fleet=window.__duFleet;if(!fleet)return say('차고 분석기 실행 오류');notice='';render();try{await fleet.refresh();}catch(e){say('갱신 오류: '+String(e?.message||e));}render();};
 q('#du-analyze').onclick=()=>toggle('report');q('#du-report-close').onclick=()=>toggle('race');
 q('#du-log').onclick=()=>{press('copy-btn');say('입력 기록 복사 실행');};
+q('#du-copy-analysis').onclick=()=>{press('analysis-copy');say('누적 분석 기록 복사 실행');};
 q('#du-json').onclick=()=>{press('analysis-download');say('주행 기록 JSON 저장 실행');};
 q('#du-detect').onclick=()=>{press('detect-btn');say('차량 정보 재확인');};
 q('#du-defaults').onclick=()=>{if(getA().running||getA().chainEnabled)return say('주행 중 설정 변경 불가');press('reset-btn');settings();say('AUTO 기본값 복원');};
-q('#du-save').onclick=()=>{if(getA().running||getA().chainEnabled)return say('주행 중 설정 변경 불가');for(const el of q('#du-settings').querySelectorAll('[data-field]')){const target=autoUi()?.querySelector('#'+el.dataset.field);if(target){target.value=el.value;target.dispatchEvent(new Event('change',{bubbles:true}));}}press('save-btn');say('AUTO 설정 저장');};
+q('#du-save').onclick=()=>{if(getA().running||getA().chainEnabled)return say('주행 중 설정 변경 불가');const profileSource=q('#du-settings').querySelector('[data-profile]'),profileTarget=autoUi()?.querySelector('#vehicleProfile');if(profileSource&&profileTarget){profileTarget.value=profileSource.value;profileTarget.dispatchEvent(new Event('change',{bubbles:true}));}for(const el of q('#du-settings').querySelectorAll('[data-field]')){const target=autoUi()?.querySelector('#'+el.dataset.field);if(target){target.value=el.value;target.dispatchEvent(new Event('change',{bubbles:true}));}}press('save-btn');say('AUTO 설정 저장');};
 q('#du-export').onclick=()=>{window.__duFleet?.exportJson?.();say('차고 백업 다운로드 실행');};
 q('#du-trades').onclick=async()=>{await window.__duFleet?.captureTrades?.();render();};
 function minimize(v){minimized=v;q('.panel').style.display=v?'none':'block';q('#du-expand').style.display=v?'block':'none';position();}
