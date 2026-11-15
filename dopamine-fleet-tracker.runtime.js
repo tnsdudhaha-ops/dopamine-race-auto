@@ -1,10 +1,10 @@
-// Dopamine Fleet Tracker runtime v1.1.19 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.20 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.19';
+  const VERSION = '1.1.20';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
-  const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
+  const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
   if (document.getElementById('dft-root')) return;
   let db;
   try { db = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (_) { db = {}; }
@@ -40,26 +40,32 @@
     }
     return null;
   }
-  function currentGarageOwner() {
-    // Identify the foremost visible garage heading by its exact title,
-    // rather than searching unrelated page labels or previously open dialogs.
-    const nodes=[...document.querySelectorAll('h1,h2,h3,h4,h5,div,span,strong,b')];
-    const candidates=[];
-    for(const el of nodes) {
+  function garageTitleCandidates() {
+    const found=[];
+    const els=document.querySelectorAll('h1,h2,h3,h4,h5,div,span,strong,b,p');
+    for(const el of els) {
       if(el===root||root.contains(el)||!el.getClientRects().length) continue;
-      const t=(el.textContent||'').replace(/\s+/g,'').trim();
-      if(t.length<4||t.length>40) continue;
+      const r=el.getBoundingClientRect();
+      if(r.width<1||r.height<1||r.bottom<0||r.top>innerHeight) continue;
+      const t=(el.textContent||'').replace(/[\u200b-\u200d\ufeff]/g,'').replace(/\s+/g,'').trim();
+      if(t.length<3||t.length>55||!t.includes('의차고')) continue;
       const owner=garageOwnerFromText(t);
-      if(!owner||!t.endsWith('의차고')) continue;
-      const rect=el.getBoundingClientRect();
-      if(rect.width<1||rect.height<1||rect.top<0||rect.bottom>innerHeight) continue;
-      const style=getComputedStyle(el);
-      if(style.visibility==='hidden'||style.display==='none') continue;
-      // Prefer the smallest exact heading, not an ancestor containing other names.
-      candidates.push({owner,len:t.length,top:rect.top,area:rect.width*rect.height});
+      found.push({text:t,owner,top:Math.round(r.top),length:t.length,area:Math.round(r.width*r.height)});
     }
-    candidates.sort((a,b)=>a.len-b.len||a.area-b.area||a.top-b.top);
-    return candidates[0]?.owner||null;
+    return found.sort((a,b)=>a.length-b.length||a.area-b.area||a.top-b.top).slice(0,12);
+  }
+  function currentGarageOwner() {
+    const titles=garageTitleCandidates();
+    return titles.find(x=>x.owner)?.owner||null;
+  }
+  function showDiagnostics() {
+    const titles=garageTitleCandidates();
+    const p=activeGaragePanel();
+    const lines=['진단 v'+VERSION,'제목 후보: '+titles.length,
+      ...titles.map(x=>x.text+' => '+(x.owner||'미인식')+' (y='+x.top+')'),
+      '차고 영역: '+(p?'찾음':'없음'),
+      '현재 소유주: '+(currentGarageOwner()||'미인식')];
+    note(lines.join(' / '));
   }
   function activeGaragePanel() {
     const visible=el=>!!(el&&el.getClientRects().length);
@@ -267,6 +273,7 @@
     shadow.getElementById('user').onchange = e => {selected=e.target.value;render();};
     shadow.getElementById('garage').onclick = () => captureGarage();
     shadow.getElementById('trades').onclick = () => captureTrades();
+    shadow.getElementById('diagnose').onclick = showDiagnostics;
     shadow.getElementById('export').onclick = exportJson;
     shadow.getElementById('auto').onchange = e => {db.settings.auto=e.target.checked;save();};
   }
