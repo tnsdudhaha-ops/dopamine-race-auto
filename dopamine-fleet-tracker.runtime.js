@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.12 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.13 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.12';
+  const VERSION = '1.1.13';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -32,28 +32,43 @@
     const selectors = '[role="dialog"],[aria-modal="true"],[class*="modal"],[class*="Modal"],[class*="popup"],[class*="Popup"]';
     return [...document.querySelectorAll(selectors)].filter(e => e !== root && !root.contains(e) && e.getClientRects().length);
   }
-  function panel() {
-    const all=panels();
-    const candidates=all.filter(e=>/차고|보유\s*차량|최고\s*★/.test(e.innerText||''));
-    const pool=candidates.length?candidates:all;
-    return pool.sort((a,b)=>(b.innerText||'').length-(a.innerText||'').length)[0]||null;
-  }
-  function detectOwner(p) {
-    if(!p) return null;
+  function garageOwnerFromText(raw) {
+    const t=String(raw||'').replace(/\s+/g,'').replace(/[\u200b-\u200d\ufeff]/g,'');
     const names=[...Object.keys(ALIASES),...USERS].sort((a,b)=>b.length-a.length);
-    const headers=[...p.querySelectorAll('h1,h2,h3,h4,[class*=title],[class*=Title],[class*=header],[class*=Header]')];
-    const texts=[...headers.map(el=>el.textContent||''),p.textContent||'',p.innerText||''];
-    for(const raw of texts) {
-      const t=String(raw).replace(/\s+/g,'').replace(/[🏁🏎️🚗]/g,'');
-      for(const name of names) {
-        if(t.includes(name+'의차고')||t.includes(name+'차고')||t.includes('차고:'+name)) return who(name);
-      }
+    for(const name of names) {
+      if(t.includes(name+'의차고')||t.includes(name+'차고')) return who(name);
     }
     return null;
   }
   function activeGaragePanel() {
-    const matches=panels().filter(e=>/보유\s*차량|최고\s*★/.test(e.innerText||''));
-    return matches.sort((a,b)=>(b.innerText||'').length-(a.innerText||'').length)[0]||panel();
+    const visible=el=>!!(el&&el.getClientRects().length);
+    const all=panels();
+    // Select the complete dialog, not a nested card or an inner popup-like component.
+    const titled=[...document.querySelectorAll('h1,h2,h3,h4,header,div,span')]
+      .filter(el=>visible(el)&&el.children.length<5&&
+        garageOwnerFromText(el.textContent||'')&&
+        (el.textContent||'').length<160);
+    for(const title of titled) {
+      const owner=garageOwnerFromText(title.textContent);
+      let ancestor=title;
+      for(let i=0;i<12&&ancestor.parentElement;i++) {
+        ancestor=ancestor.parentElement;
+        if(!visible(ancestor)) break;
+        const text=ancestor.textContent||'';
+        if(/보유\s*차량/.test(text)&&/최고\s*★/.test(text)&&text.length<30000) {
+          if(owner) return ancestor;
+        }
+      }
+    }
+    const candidates=all.filter(el=>/보유\s*차량/.test(el.textContent||'')&&/최고\s*★/.test(el.textContent||''));
+    return candidates.sort((a,b)=>(b.textContent||'').length-(a.textContent||'').length)[0]||null;
+  }
+  function panel() {
+    return activeGaragePanel()||panels().sort((a,b)=>(b.textContent||'').length-(a.textContent||'').length)[0]||null;
+  }
+  function detectOwner(p) {
+    if(!p) return null;
+    return garageOwnerFromText(p.textContent)||garageOwnerFromText(p.innerText);
   }
   function expectedTotal(p) {
     const m=(p?.innerText||'').match(/보유차량\s*[·•:]?\s*(\d+)\s*대/);
@@ -236,7 +251,7 @@
   }
   function relocateOverlay() {
     const candidates = panels();
-    const garage = candidates.find(e => /(?:의\s*차고|보유\s*차량)/.test(e.textContent || ''));
+    const garage = activeGaragePanel();
     const trade = candidates.find(e => /(?:거래|장터)/.test(e.innerText || ''));
     const target = garage || trade || null;
     // Dialogs promoted to the browser top layer cover even max-z-index body elements.
