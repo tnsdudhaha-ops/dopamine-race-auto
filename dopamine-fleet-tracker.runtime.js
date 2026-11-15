@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.31 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.32 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.31';
+  const VERSION = '1.1.32';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -368,7 +368,7 @@
       for(const raw of found){
         const stamp=feedTimestamp(raw);
         if(stamp&&(!latest||stamp>latest))latest=stamp;
-        if(checkpoint&&stamp<checkpoint&&stamp){older++;continue;}
+        if(checkpoint&&stamp&&stamp<checkpoint&&!db.transactions.some(x=>x.screen===screen.type&&!x.parsed&&feedTimestamp(x.raw)===stamp)){older++;continue;}
         if(!stamp)undated++;
         let item=parseTradeEntry(raw,screen.type);
         if(!item) {
@@ -380,6 +380,11 @@
         } else {item.parsed=true;}
         item.category=classifyFeedItem(item);
         const key='feed|'+screen.type+'|'+clean(raw);
+        const old=db.transactions.find(x=>x.screen===screen.type&&!x.parsed&&stamp&&feedTimestamp(x.raw)===stamp&&clean(x.raw).length<clean(raw).length);
+        if(old&&item.parsed){
+          Object.assign(old,item,{observedAt:old.observedAt||item.observedAt});
+          db.seen.push(key);parsedAdded++;continue;
+        }
         if(db.seen.includes(key))continue;
         db.seen.push(key);db.transactions.push(item);added++;
         if(item.parsed)parsedAdded++;else rawAdded++;
