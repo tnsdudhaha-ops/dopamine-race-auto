@@ -1,6 +1,6 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-15T21:30:50.871Z",
+  "generatedAt": "2026-11-15T23:53:40.439Z",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0",
   "participants": [
@@ -423,9 +423,9 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-15T06:07:08.690Z",
-      "modelCount": 11,
-      "vehicleCount": 12,
+      "updatedAt": "2026-11-15T23:53:40.084Z",
+      "modelCount": 12,
+      "vehicleCount": 13,
       "vehicles": [
         {
           "grade": "SR",
@@ -465,6 +465,13 @@
         {
           "grade": "S",
           "model": "현대 쏘나타",
+          "maxStars": 3,
+          "quantity": 1,
+          "starBreakdown": []
+        },
+        {
+          "grade": "S",
+          "model": "현대 아반떼 N",
           "maxStars": 3,
           "quantity": 1,
           "starBreakdown": []
