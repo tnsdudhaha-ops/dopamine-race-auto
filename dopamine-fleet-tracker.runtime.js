@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.26 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.27 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.26';
+  const VERSION = '1.1.27';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -59,13 +59,22 @@
     return titles.find(x=>x.owner)?.owner||null;
   }
   function showDiagnostics() {
+    const screen=tradeScreen();
+    if(screen) {
+      const saved=db.transactions.filter(x=>x.screen===screen.type);
+      const samples=saved.filter(x=>/출고|거래|매입/.test(x.raw||'')).slice(0,3);
+      const lines=['원문 진단 v'+VERSION,'화면: '+screen.type,'저장: '+saved.length+'건',
+        ...samples.map((x,i)=>'샘플'+(i+1)+': '+JSON.stringify(x.raw).slice(0,360)),
+        '샘플 해석: '+samples.map(x=>{const p=parseTradeEntry(x.raw,screen.type);return p?JSON.stringify({seller:p.seller,model:p.model,stars:p.stars}):'실패';}).join(' / ')];
+      note(lines.join(' | '));
+      return;
+    }
     const titles=garageTitleCandidates();
     const p=activeGaragePanel();
-    const lines=['진단 v'+VERSION,'제목 후보: '+titles.length,
-      ...titles.map(x=>x.text+' => '+(x.owner||'미인식')+' (y='+x.top+')'),
+    note(['진단 v'+VERSION,'제목 후보: '+titles.length,
+      ...titles.map(x=>x.text+' => '+(x.owner||'미인식')),
       '차고 영역: '+(p?'찾음':'없음'),
-      '현재 소유주: '+(currentGarageOwner()||'미인식')];
-    note(lines.join(' / '));
+      '현재 소유주: '+(currentGarageOwner()||'미인식')].join(' / '));
   }
   function activeGaragePanel() {
     const visible=el=>!!(el&&el.getClientRects().length);
