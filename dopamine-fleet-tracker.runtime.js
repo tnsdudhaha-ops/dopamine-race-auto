@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.33 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.34 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.33';
+  const VERSION = '1.1.34';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -238,17 +238,20 @@
   }
   let fleetRefreshing=false;
   function participantRows() {
-    const buttons=[...document.querySelectorAll('button')].filter(b=>b.getClientRects().length&&clean(b.textContent)==='차고 구경');
+    const names=[...new Set([...Object.keys(ALIASES),...USERS])].sort((a,b)=>b.length-a.length);
+    const buttons=[...document.querySelectorAll('button,[role="button"]')].filter(b=>
+      b.getClientRects().length&&/차고\s*구경/.test(clean(b.innerText||b.textContent))&&clean(b.innerText||b.textContent).length<30);
     return buttons.map(button=>{
-      let row=button;
-      for(let n=0;n<7&&row.parentElement;n++){
-        row=row.parentElement;
-        const text=clean(row.innerText||row.textContent);
-        if(text.includes('차고 구경')&&text.length<180&&/그레이트|픸홀|픽홀|참돔|킹황|갱서|ㅇ발|○발|◯발|〇발/.test(text))break;
+      let row=button.parentElement,owner=null;
+      for(let n=0;n<12&&row;n++,row=row.parentElement){
+        const t=clean(row.innerText||row.textContent);
+        const matches=names.filter(name=>t.includes(name));
+        const distinct=[...new Set(matches.map(who))];
+        const buttonCount=[...row.querySelectorAll('button,[role="button"]')].filter(b=>/차고\s*구경/.test(clean(b.innerText||b.textContent))&&clean(b.innerText||b.textContent).length<30).length;
+        if(distinct.length===1&&buttonCount===1){owner=distinct[0];break;}
+        if(buttonCount>1)break;
       }
-      const text=clean(row.innerText||row.textContent);
-      const name=Object.keys(ALIASES).concat(USERS).sort((a,b)=>b.length-a.length).find(n=>text.includes(n));
-      return {button,owner:name?who(name):null};
+      return {button,owner};
     });
   }
   async function waitForGarage(owner,timeout=6000) {
@@ -271,7 +274,7 @@
     if(fleetRefreshing||collecting)return;
     const initial=participantRows();
     if(initial.length!==6||initial.some(x=>!x.owner)||new Set(initial.map(x=>x.owner)).size!==6){
-      note('참가자 현황에서 6명 모두 확인되지 않습니다. 상점 → 참가자 현황을 열어주세요.');
+      note('참가자 인식 '+initial.filter(x=>x.owner).length+'/'+initial.length+'명 ('+initial.map(x=>x.owner||'?').join(', ')+'). 상점 → 참가자 현황을 확인하세요.');
       return;
     }
     fleetRefreshing=true;
