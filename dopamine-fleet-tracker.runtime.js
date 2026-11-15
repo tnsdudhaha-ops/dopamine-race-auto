@@ -1,7 +1,7 @@
-// Dopamine Fleet Tracker runtime v1.1.11 (loaded by bootstrap)
+// Dopamine Fleet Tracker runtime v1.1.12 (loaded by bootstrap)
 (function () {
   'use strict';
-  const VERSION = '1.1.11';
+  const VERSION = '1.1.12';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'그레이트':'구레긔','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -62,34 +62,47 @@
   function parseGarage(p) {
     if (!p) return [];
     const items=[];
-    for (const el of p.querySelectorAll('div,li,article')) {
-      const t=el.innerText||'';
-      if (!/최고\s*★\s*[1-5]/.test(t) || t.length>900) continue;
-      if ([...el.children].some(ch=>/최고\s*★\s*[1-5]/.test(ch.innerText||'') && /(?:^|\s)(SSR|SR|S|R)(?=\s|$)/.test(ch.innerText||''))) continue;
-      const grade=t.match(/(?:^|\s)(SSR|SR|S|R)(?=\s|$)/);
-      const summary=t.match(/최고\s*★\s*([1-5])\s*[·•]?\s*(\d+)\s*대/);
-      if (!grade||!summary) continue;
-      const lines=t.split('\n').map(clean).filter(Boolean);
-      const ix=lines.findIndex(x=>/최고\s*★/.test(x));
-      if (ix<1) continue;
-      let nameParts=lines.slice(Math.max(0,ix-6),ix).filter(x=>
-        !/^(SSR|SR|S|R)$/.test(x) &&
-        !/^ERS|^⚡|^탑승중$|^최고\s*★|^\d+성\s*[×x]\s*\d+/.test(x) &&
-        !/^(\d+\s*RP|\d+\s*E)$/.test(x)
-      );
-      const model=nameParts.slice(-2).join(' ').replace(/\s*최고\s*$/,'').trim();
-      if (!model||model.length>65) continue;
-      const breakdown=[];
-      const breakdownText=lines.slice(ix+1).join(' ');
-      for (const m of breakdownText.matchAll(/([1-5])\s*성\s*[×x]\s*(\d+)/g)) {
-        breakdown.push({stars:Number(m[1]),qty:Number(m[2])});
+    const summaryRe=/최고\s*★\s*([1-5])\s*[·•]?\s*(\d+)\s*대/;
+    const nodes=[...p.querySelectorAll('div,li,article,section,span,p')];
+    const candidates=nodes.filter(el=>{
+      if(el===root||root.contains(el)) return false;
+      const t=el.textContent||'';
+      if(!summaryRe.test(t)||t.length>650) return false;
+      return ![...el.children].some(ch=>summaryRe.test(ch.textContent||''));
+    });
+    for(const leaf of candidates) {
+      let card=leaf;
+      for(let i=0;i<5 && card.parentElement && card.parentElement!==p;i++){
+        const parent=card.parentElement;
+        const text=parent.innerText||parent.textContent||'';
+        if(text.length>650) break;
+        if((text.match(/최고\s*★\s*[1-5]\s*[·•]?\s*\d+\s*대/g)||[]).length>1) break;
+        card=parent;
+        if(/(?:^|\s)(SSR|SR|S|R)(?=\s|$)/.test(text)) break;
       }
-      const qty=Number(summary[2]), stars=Number(summary[1]);
-      const sum=breakdown.reduce((n,x)=>n+x.qty,0);
-      items.push({grade:grade[1],model,stars,qty,breakdown:sum===qty?breakdown:[]});
+      const t=card.innerText||card.textContent||'';
+      const summary=t.match(summaryRe);
+      const grade=t.match(/(?:^|\s)(SSR|SR|S|R)(?=\s|$)/);
+      if(!summary||!grade) continue;
+      const lines=t.split(/\n/).map(clean).filter(Boolean);
+      const ix=lines.findIndex(x=>summaryRe.test(x));
+      if(ix<0) continue;
+      const before=lines.slice(0,ix);
+      const gradeIx=before.findIndex(x=>/^(SSR|SR|S|R)$/.test(x));
+      const relevant=gradeIx>=0?before.slice(gradeIx+1):before;
+      const filtered=relevant.filter(x=>!(/^(SSR|SR|S|R)$/.test(x)||
+        /^(?:ERS|⚡|탑승중|최고\s*★|보유\s*차량)/.test(x)||
+        /^\d+\s*(?:RP|E)$/.test(x)));
+      const model=filtered.slice(-2).join(' ').trim();
+      if(!model||model.length>80) continue;
+      const qty=Number(summary[2]),stars=Number(summary[1]);
+      const breakdown=[];
+      for(const m of lines.slice(ix+1).join(' ').matchAll(/([1-5])\s*성\s*[×x]\s*(\d+)/g))
+        breakdown.push({stars:Number(m[1]),qty:Number(m[2])});
+      items.push({grade:grade[1],model,stars,qty,breakdown:breakdown.reduce((n,x)=>n+x.qty,0)===qty?breakdown:[]});
     }
     const map=new Map();
-    for (const v of items) map.set([v.grade,v.model,v.stars].join('|'),v);
+    for(const v of items) map.set([v.grade,v.model,v.stars].join('|'),v);
     return [...map.values()];
   }
   function differences(a,b) {
