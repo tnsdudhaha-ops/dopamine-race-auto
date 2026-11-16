@@ -475,6 +475,20 @@
 - 주행 엔진·통합 로더 파일은 이 결과 분석 시 추가 수정하지 않음. **다음 개선 우선순위**: `boostOff:12`의 감지 안정화·최초 관측 시점(5 샘플)/66.6ms 공백과 이벤트 매칭·부스터 전환 지연 분석, `boostOff:18` 늦음 회귀, 고속·타이어 조건 반복 A/B. 기존 성공한 `brakeOn:13` 추정 예측과 고정 Release 3.0 `predict()`는 보호하고, 반복 실게임 검증 후 제한적 조정.
 - 주행 한 판에 18개의 AUTO 이벤트가 있고 `allEvents=true`였다는 것과 프로젝트의 **20/20 PERFECT 전체 목표**는 구분. 이 트랙에서 실제 게임이 18개 이벤트를 요구하는지 20개를 요구하는지는 별도 화면 확인이 필요.
 
+### 2026-11-16 13:50 KST · 소프트 1판 재전송 성공 및 v3.3.24 타이어별 비교
+
+**[Google Sheets `주행기록` 58행 + Google Drive 원본 `mwis5k16-2bk6sxs.json` (`1Py_fBV8_9CB49YrILt81fZC6btPWNPhR`)]**
+- 사용자가 소프트 1판 후 자료 재전송을 요청했고, 13:50:32 KST의 시트 행 및 13:50:31.931 KST 업로드된 Drive JSON이 확인됨. **실제 JSON 주행 기록 시각은 `2026-11-16T04:46:16.499Z`(13:46:16 KST)**. 주행 시각과 업로드 시각이 다른 지연 전송 사례다. 오류 원인(일시적 네트워크/인증/로컬 큐)은 확인되지 않음.
+- 조건: **`뉘르부랄링`**, SSR 테슬라 로드스터 ★1, **소프트**, AUTO **v3.3.24**, `courseScope=editor-v1::뉘르부랄링`. `complete=true`, `reason=complete`, `completionEvidence={allEvents:true,allSegments:true,phase:done}`.
+- 결과: **18 입력 중 PERFECT 13, GREAT 5, GOOD 0, BAD 0, MISS 0, 판정 미확인 0**. 이벤트 PERFECT 13/18=72.22%; 전 이벤트 PERFECT 경기 0/1. 소프트에 대해서 기존 v3.3.21/v3.3.22 동일 조건 비교 주행은 없으므로 버전별 향상률을 계산하지 않음.
+- GREAT 5건 전부 **late**: `brakeOn:5` 0.9m, `boostOn:11` 1.8m, `boostOff:12` 0.8m, `brakeOn:13` 0.9m, `boostOff:18` 1.1m. 추정 입력(`triggerSource=short-gap-coast`)은 **`brakeOff:8` 1건이고 PERFECT**; 나머지 17건은 표식 관측 입력. **`autoCorrectionAppliedEvents=0`**이므로 실제 학습 타이밍 보정의 성능 증거는 없음.
+- `detectionHealth={lateSpawns:3,trackLongGaps:38,rafLongGaps:0,maxTrackGapMs:183.08,coastTriggers:1}`. `boostOn:11` GREAT의 최대 표식 관측 간격 166.44ms, `brakeOn:13` GREAT의 최대 표식 관측 간격 116.5ms; 지연이 해당 이벤트의 오차를 유발했는지는 직접 확정할 수 없음.
+- **동일 AUTO v3.3.24 하드 1판과 비교:** 하드 14 PERFECT/18, GREAT 3, GOOD 1, 공백 추정 8회; 소프트 13 PERFECT/18, GREAT 5, GOOD 0, 공백 추정 1회. 두 판 합계 **27 PERFECT/36=75%**, GREAT 8, GOOD 1, BAD/MISS 0, 판정 미확인 0; 전 입력 PERFECT 0/2판. 서로 다른 타이어의 각 1판 데이터이므로 타이어가 오차 차이의 원인이라고 단정 불가.
+- 공통 늦음 문제 이벤트: **`brakeOn:5`, `boostOff:12`, `boostOff:18`**, 하드 단독 `boostOff:4`, 소프트 단독 `boostOn:11` 및 `brakeOn:13`. 특히 `boostOff:12`는 하드 GOOD late 3.7m, 소프트 GREAT late 0.8m로 변동이 큰 구간이므로 표식 식별·관측/속도 변화·부스터 해제 동작과 실제 판정의 관계를 분석해야 함.
+- **다음 개선 실험 제안(미구현):** 공통 late 위치에 대한 이벤트별 예측 검증과 계측 강화, BOOST OFF 12번의 초기 표식 포착 시점, 간헐적 장거리 관측 누락, 추정/화면 입력별 오차 비교; 기존 성공한 하드 `brakeOn:13`와 동결 `predict()` 보존, 소규모 A/B 후 회귀 검사. 자동 보정 표본 조건 미달로 실제 적용 0건.
+- 현재 새 트랙 AUTO 입력은 18회/판(모두 판정 매칭)이며, 게임의 원래 이벤트가 18개인지·프로젝트 표준 20/20과 어떤 관계인지 게임 UI로 별도 검증 필요.
+- **이 기록 확인 과정에서는 AUTO/통합 로더/UI 코드를 수정하지 않음.**
+
 ### 업데이트 규칙
 - **확정 규칙** 수정은 사용자 발언·게임 UI·원본을 근거로 날짜와 변경 전후를 남긴다.
 - **관측 스냅샷**은 오래된 숫자를 사실처럼 재사용하지 말고 소스 JSON에서 새로 계산한다.
