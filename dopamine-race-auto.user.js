@@ -11,6 +11,8 @@
 // ==/UserScript==
 (() => {
 'use strict';
+// Avoid duplicate driving engines when the stable unified GitHub loader is active.
+if(window.__duMode&&!window.__duUnifiedLoadingAuto)return;
 const VERSION='3.3.24', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
