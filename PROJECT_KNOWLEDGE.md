@@ -462,6 +462,19 @@
 - **실게임 주행 효과는 여전히 미검증**: v3.3.23 주행 보정의 실게임 PERFECT 개선 여부와 AUTO v3.3.24의 통합 브라우저 실행 상태는 실제 게임 화면과 신규 주행 JSON을 대조해야 함.
 - 새 엔진 개발 버전을 불필요하게 올리지 않았으며, 새 Release 지정도 없음.
 
+### 2026-11-16 13:40 KST · 통합 GitHub 로더 이후 AUTO v3.3.24 하드 첫 실주행
+
+**[확인: Google Sheets `주행기록` 57행 + Google Drive 원본 `mwiry4r3-v65bjlk.json` (`1CcwwjJvZ31hkSU07LqN9mDB52idM8lsI`)]**
+- 코스: `뉘르부랄링` (`editor-v1::뉘르부랄링`), SSR 테슬라 로드스터 ★1, 하드 타이어, 엔진 v3.3.24. 시각 JSON `2026-11-16T04:40:28.716Z`(13:40:28 KST). `complete=true`, `reason=complete`, `completionEvidence={allEvents:true,allSegments:true,phase:'done'}`. 18 입력 중 **PERFECT 14, GREAT 3, GOOD 1, BAD 0, MISS 0, 미매칭 0**. PERFECT 비율 **14/18=77.78%**, 완전 PERFECT **0/1판**.
+- **핵심 개선:** v3.3.22 하드의 `brakeOn:13`은 프레임 관측 공백 83.24ms 후 y=323.5px에서 입력, 구간 결과 **진입 BAD·늦음 7.4m**, 이벤트 등급 `null`(그때 BAD 미파싱). v3.3.24 하드는 `brakeOn:13`을 **`short-gap-coast` 추정 입력으로 실행해 PERFECT**. 당시 마지막 관측 y=297.5px, 경과 33.30ms, 추정 y≈305.13px, 추정 판정선 초과 0.603px. 실제 실게임에서 보완 로직이 최소 이 이벤트에 대해 작동한 것이 확인됨.
+- **공백 추정 입력 전체 8건:** `brakeOff:2` PERFECT, `brakeOn:5` GREAT 늦음 1.0m, `brakeOn:7` PERFECT, `brakeOff:8` PERFECT, `boostOn:11` PERFECT, `brakeOn:13` PERFECT, `brakeOff:16` PERFECT, `boostOff:18` GREAT 늦음 1.9m. **8건 중 6 PERFECT·2 GREAT**. 나머지 일반 화면 관측 입력 10건 중 PERFECT 8·GREAT 1·GOOD 1.
+- **잔여 비PERFECT 네 건(전부 늦음):** `boostOff:4` GREAT 0.8m(화면 입력), `brakeOn:5` GREAT 1.0m(추정 입력), `boostOff:12` GOOD 3.7m(화면 입력; 이벤트 직전 표식 관측 지연 66.6ms·이벤트 추적 관측 5회), `boostOff:18` GREAT 1.9m(추정 입력).
+- **전후 하드 1판씩 비교:** v3.3.22 `14 PERFECT·2 GREAT·1 GOOD·1 BAD`(18 입력, BAD 이벤트 파싱 누락) → v3.3.24 `14 PERFECT·3 GREAT·1 GOOD·0 BAD`(18 입력 전부 등급 기록). **PERFECT 이벤트 비율은 14/18로 그대로**, 극단적인 BAD가 사라지고 전체 판정 기록은 정상 연결됨. `boostOff:12`는 이전 GREAT 늦음 1.1m에서 현재 GOOD 늦음 3.7m로 **악화**, `boostOff:18`은 GREAT 늦음 0.8→1.9m로 **악화**. 표본 1판씩이므로 알고리즘 성능의 통계적 확정 불가.
+- `detectionHealth={lateSpawns:4,trackLongGaps:38,rafLongGaps:0,maxTrackGapMs:216.42,coastTriggers:8}`; `observationLearning.mode=confidence-gated`, `runFeedback=18`, `totalProfileFeedback=35`, `autoCorrectionAppliedEvents=0`. 즉 이 개선은 **실제 학습 타이밍 보정 덕분이 아니라 짧은 공백 추정 입력 기능이 작동했기 때문**으로 해석해야 함.
+- 시트/Drive의 저장 성공과 새 `version=3.3.24` 기록은 **최신 AUTO 코드 실행과 저장이 실기기에서 이뤄졌다는 증거**. 단, 로더의 GitHub 온라인 모드/캐시 모드 식별 정보는 주행 JSON에 직접 저장되지 않아 **GitHub 로더가 최신 네트워크 다운로드에 성공했는지와 기존 캐시 사용인지까지 원본으로 확정할 수 없음**.
+- 주행 엔진·통합 로더 파일은 이 결과 분석 시 추가 수정하지 않음. **다음 개선 우선순위**: `boostOff:12`의 감지 안정화·최초 관측 시점(5 샘플)/66.6ms 공백과 이벤트 매칭·부스터 전환 지연 분석, `boostOff:18` 늦음 회귀, 고속·타이어 조건 반복 A/B. 기존 성공한 `brakeOn:13` 추정 예측과 고정 Release 3.0 `predict()`는 보호하고, 반복 실게임 검증 후 제한적 조정.
+- 주행 한 판에 18개의 AUTO 이벤트가 있고 `allEvents=true`였다는 것과 프로젝트의 **20/20 PERFECT 전체 목표**는 구분. 이 트랙에서 실제 게임이 18개 이벤트를 요구하는지 20개를 요구하는지는 별도 화면 확인이 필요.
+
 ### 업데이트 규칙
 - **확정 규칙** 수정은 사용자 발언·게임 UI·원본을 근거로 날짜와 변경 전후를 남긴다.
 - **관측 스냅샷**은 오래된 숫자를 사실처럼 재사용하지 말고 소스 JSON에서 새로 계산한다.
