@@ -58,6 +58,7 @@ function evaluateSparseBoostCoast(track,now){
   const predictedY=estimatedY+prediction.predictionPx+cfg.boostOffset
     +(correction[eventKey]||0)+autoLead.px;
   const overshoot=predictedY-triggerLine;
+  if(!Number.isFinite(estimatedY)||!Number.isFinite(predictedY)||!Number.isFinite(overshoot))return null;
   if(overshoot< -SPARSE_BOOST_GUARD.anticipationPx
     ||overshoot>SPARSE_BOOST_GUARD.maxPredictedOvershootPx)return null;
   return {eventKey,prediction,autoLead,target,predictedY,meta:{
