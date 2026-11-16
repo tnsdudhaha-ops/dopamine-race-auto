@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.28
+// @version      3.3.29
 // @description  Release 3.0 / 예측식 동결 / 경기 시간·휠락 결과 관측·범용 학습 진단 기록
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
@@ -13,7 +13,7 @@
 'use strict';
 // Avoid duplicate driving engines when the stable unified GitHub loader is active.
 if(window.__duMode&&!window.__duUnifiedLoadingAuto)return;
-const VERSION='3.3.28', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.29', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -269,7 +269,31 @@ function autoLeadPreview(eventKey,speed){
   if(!observeState||profile||(correction[eventKey]||0)!==0)return empty;
   const band=speed>=.19?'high':speed>=.12?'medium':'low';
   const samples=observeState.events?.[eventKey+'|'+band]?.qualityRecent;
-  if(!Array.isArray(samples))return empty;
+  // Generalize only across event positions with the same action and speed band.
+  // Do not pool different cars, tires, tracks or speed bands; the observation profile already isolates those.
+  // Per-event evidence retains priority. Shared evidence requires more independent races.
+  if(!Array.isArray(samples)||samples.length<AUTO_TUNE.minSamples){
+    const action=eventKey.split(':')[0];
+    const pooled=[];
+    for(const [key,entry] of Object.entries(observeState.events||{})){
+      if(key.endsWith('|'+band)&&key.split(':')[0]===action&&Array.isArray(entry.qualityRecent))
+        pooled.push(...entry.qualityRecent);
+    }
+    const byRun=new Map();
+    for(const item of pooled){
+      if(!item?.runId)continue;
+      const old=byRun.get(item.runId);
+      if(!old||old.grade==='perfect'&&item.grade!=='perfect')byRun.set(item.runId,item);
+    }
+    const shared=[...byRun.values()];
+    const late=shared.filter(x=>x.grade!=='perfect'&&x.direction==='late').length;
+    const early=shared.filter(x=>x.grade!=='perfect'&&x.direction==='early').length;
+    if(shared.length>=8&&late>=6&&early===0&&late/shared.length>=.55)
+      return {px:.5,samples:shared.length,runs:shared.length,reason:'shared-action-speed-consistent-late'};
+    if(shared.length>=8&&early>=6&&late===0&&early/shared.length>=.55)
+      return {px:-.5,samples:shared.length,runs:shared.length,reason:'shared-action-speed-consistent-early'};
+    if(!Array.isArray(samples))return empty;
+  }
   const unique=[...new Set(samples.map(x=>x.runId))].length;
   if(samples.length<AUTO_TUNE.minSamples||unique<AUTO_TUNE.minRuns)
     return {px:0,samples:samples.length,runs:unique,reason:'insufficient'};
