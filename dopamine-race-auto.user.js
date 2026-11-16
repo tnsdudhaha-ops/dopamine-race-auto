@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.29
-// @description  Release 3.0 / 예측식 동결 / 경기 시간·휠락 결과 관측·범용 학습 진단 기록
+// @version      3.3.30
+// @description  Release 3.0 / 예측식 동결 / 완주 확정 학습·최근 프레임 품질 검사·오보정 방지
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
@@ -13,7 +13,7 @@
 'use strict';
 // Avoid duplicate driving engines when the stable unified GitHub loader is active.
 if(window.__duMode&&!window.__duUnifiedLoadingAuto)return;
-const VERSION='3.3.29', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.30', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -216,9 +216,9 @@ function saveLearning(){const key=learningKey();if(!key)return;try{localStorage.
 // Stage 1: automatic, isolated, observation-only learning. The proven predict()
 // timing and legacy manual-profile corrections are not changed by this store.
 const OBSERVE_PREFIX='dopamine-auto-v338:observe:', TRACE_PRE=12, TRACE_POST=8, TRACE_WINDOW_MS=180;
-let observeKey=null,observeState=null,observeRunCount=0,observeRunGreat=0;
+let observeKey=null,observeState=null,observeRunCount=0,observeRunGreat=0,observePending=[],observeCommitted=false;
 function prepareObservation(vehicle){
-  observeKey=null;observeState=null;observeRunCount=0;observeRunGreat=0;
+  observeKey=null;observeState=null;observeRunCount=0;observeRunGreat=0;observePending=[];observeCommitted=false;
   if(!vehicle?.name||!vehicle?.grade||!Number.isInteger(Number(vehicle.stars))||!vehicle.tire)return;
   const identity=vehicleKey(vehicle),key=OBSERVE_PREFIX+encodeURIComponent(identity);
   let saved=null;
@@ -227,82 +227,92 @@ function prepareObservation(vehicle){
   observeState=saved?.schema===1&&saved?.identity===identity&&saved?.events&&typeof saved.events==='object'
     ? saved
     : {schema:1,mode:'confidence-gated',identity,profile:{courseId,courseName,courseScope,vehicle:vehicle.name,grade:vehicle.grade,stars:vehicle.stars,tire:vehicle.tire},events:{},totalFeedback:0,createdAt:new Date().toISOString(),updatedAt:null};
+  // Previous versions persisted partial races before the finish was confirmed.
+  // Drop known interrupted run votes from auto-tuning; keep their logs for diagnostics.
+  const interruptedIds=new Set(readSavedRuns().filter(x=>x.complete===false).map(x=>x.runId).filter(Boolean));
+  if(interruptedIds.size)for(const entry of Object.values(observeState.events||{})){
+    if(Array.isArray(entry.qualityRecent))
+      entry.qualityRecent=entry.qualityRecent.filter(x=>!interruptedIds.has(x.runId));
+  }
+}
+// Only the six frames nearest to the input should gate training quality.
+// A long gap much earlier in a track must not discard a clean, visible trigger.
+function validCorrectionSample(record){
+  if(!record||record.observationCount<8||record.lateSpawnSuppressed||record.triggerSource!=='visible')return false;
+  if(!(record.firstSeenY<record.triggerLineY-DETECTION_GUARD.lateSpawnSlackPx))return false;
+  if(!(record.lastObservationGapMs>0&&record.lastObservationGapMs<=50))return false;
+  const frames=record.frameTrace?.before?.slice(-6)||[];
+  if(frames.length<4)return false;
+  return frames.every(x=>Number.isFinite(x.y)&&x.observationGapMs>0&&x.observationGapMs<=60)
+    &&frames.every((x,i)=>i===0||x.y>=frames[i-1].y);
 }
 function observeFeedback(record,parsed){
   if(!observeState||!record||!parsed?.grade)return;
-  const band=record.speed>=.19?'high':record.speed>=.12?'medium':'low';
-  const key=record.eventKey+'|'+band;
-  const entry=observeState.events[key]||{samples:0,perfect:0,great:0,good:0,bad:0,miss:0,late:0,early:0,measuredDistanceCount:0,signedDistanceSumM:0,speedSumPxMs:0,firstRunId:runId,lastRunId:runId};
-  entry.samples++;
-  entry[parsed.grade]=(entry[parsed.grade]||0)+1;
-  if(parsed.direction==='late'||parsed.direction==='early'){
-    entry[parsed.direction]=(entry[parsed.direction]||0)+1;
-    if(Number.isFinite(parsed.distanceM)){
-      entry.measuredDistanceCount++;
-      entry.signedDistanceSumM+=(parsed.direction==='late'?1:-1)*parsed.distanceM;
+  // Buffer until the game positively confirms a fully graded finish.
+  // This also prevents in-race feedback from changing inter-race auto correction.
+  const quality=validCorrectionSample(record);
+  record.autoLearningEligible=quality;
+  record.observeProfile=observeState.identity;
+  record.observeSpeedBand=record.speed>=.19?'high':record.speed>=.12?'medium':'low';
+  observePending.push({record,parsed:{grade:parsed.grade,direction:parsed.direction||null,distanceM:parsed.distanceM},quality});
+  observeRunCount++;
+  if(parsed.grade==='great')observeRunGreat++;
+}
+function commitCompletedObservations(){
+  if(!observeState||!observeKey||!observePending.length)return false;
+  for(const {record,parsed,quality} of observePending){
+    const band=record.observeSpeedBand;
+    const key=record.eventKey+'|'+band;
+    const entry=observeState.events[key]||{samples:0,perfect:0,great:0,good:0,bad:0,miss:0,late:0,early:0,measuredDistanceCount:0,signedDistanceSumM:0,speedSumPxMs:0,firstRunId:runId,lastRunId:runId};
+    entry.samples++;
+    entry[parsed.grade]=(entry[parsed.grade]||0)+1;
+    if(parsed.direction==='late'||parsed.direction==='early'){
+      entry[parsed.direction]=(entry[parsed.direction]||0)+1;
+      if(Number.isFinite(parsed.distanceM)){
+        entry.measuredDistanceCount++;
+        entry.signedDistanceSumM+=(parsed.direction==='late'?1:-1)*parsed.distanceM;
+      }
     }
-  }
-  entry.speedSumPxMs+=Number(record.speed)||0;
-  entry.lastRunId=runId;observeState.events[key]=entry;
-  observeState.totalFeedback=(observeState.totalFeedback||0)+1;
-  observeState.updatedAt=new Date().toISOString();
-  observeRunCount++;if(parsed.grade==='great')observeRunGreat++;
-  // Only high-quality, uniquely matched events count toward automatic timing correction.
-  // The observation-only counters above retain all matched feedback for diagnostics.
-  const quality=record.observationCount>=3&&record.firstSeenY<record.triggerLineY-DETECTION_GUARD.lateSpawnSlackPx
-    &&record.maxObservationGapMs<=DETECTION_GUARD.trackGapMs&&!record.lateSpawnSuppressed&&record.triggerSource==='visible';
-  if(quality){
-    const recent=Array.isArray(entry.qualityRecent)?entry.qualityRecent:[];
-    if(!recent.some(v=>v.runId===runId)){
-      recent.push({runId,grade:parsed.grade,direction:parsed.direction||null});
+    entry.speedSumPxMs+=Number(record.speed)||0;
+    entry.lastRunId=runId;
+    if(quality){
+      const recent=Array.isArray(entry.qualityRecent)?entry.qualityRecent:[];
+      if(!recent.some(x=>x.runId===runId))
+        recent.push({runId,grade:parsed.grade,direction:parsed.direction||null,
+          speed:record.speed,triggerSource:record.triggerSource,appliedPx:record.autoCorrectionPx||0,
+          measuredDistanceM:parsed.distanceM});
       entry.qualityRecent=recent.slice(-16);
     }
+    observeState.events[key]=entry;
+    observeState.totalFeedback=(observeState.totalFeedback||0)+1;
   }
-  record.autoLearningEligible=quality;
-  record.observeProfile=observeState.identity;record.observeSpeedBand=band;
-  try{localStorage.setItem(observeKey,JSON.stringify(observeState));}
-  catch(_){/* Current run still saves observation and frame trace in its JSON. */}
+  observeState.updatedAt=new Date().toISOString();
+  try{
+    localStorage.setItem(observeKey,JSON.stringify(observeState));
+    observeCommitted=true;observePending=[];
+    return true;
+  }catch(_){return false;}
 }
+
 // Experimental Stage 2: conservative, inter-run, confidence-gated automatic offset.
 function autoLeadPreview(eventKey,speed){
   const empty={px:0,samples:0,runs:0,reason:'insufficient-or-manual'};
   if(!observeState||profile||(correction[eventKey]||0)!==0)return empty;
   const band=speed>=.19?'high':speed>=.12?'medium':'low';
+  // Only this exact event's verified runs can change live timing.
+  // Shared action/speed patterns remain diagnostic until independently validated;
+  // selecting the worst grade from each race biases the learner toward LATE.
   const samples=observeState.events?.[eventKey+'|'+band]?.qualityRecent;
-  // Generalize only across event positions with the same action and speed band.
-  // Do not pool different cars, tires, tracks or speed bands; the observation profile already isolates those.
-  // Per-event evidence retains priority. Shared evidence requires more independent races.
-  if(!Array.isArray(samples)||samples.length<AUTO_TUNE.minSamples){
-    const action=eventKey.split(':')[0];
-    const pooled=[];
-    for(const [key,entry] of Object.entries(observeState.events||{})){
-      if(key.endsWith('|'+band)&&key.split(':')[0]===action&&Array.isArray(entry.qualityRecent))
-        pooled.push(...entry.qualityRecent);
-    }
-    const byRun=new Map();
-    for(const item of pooled){
-      if(!item?.runId)continue;
-      const old=byRun.get(item.runId);
-      if(!old||old.grade==='perfect'&&item.grade!=='perfect')byRun.set(item.runId,item);
-    }
-    const shared=[...byRun.values()];
-    const late=shared.filter(x=>x.grade!=='perfect'&&x.direction==='late').length;
-    const early=shared.filter(x=>x.grade!=='perfect'&&x.direction==='early').length;
-    if(shared.length>=8&&late>=6&&early===0&&late/shared.length>=.55)
-      return {px:.5,samples:shared.length,runs:shared.length,reason:'shared-action-speed-consistent-late'};
-    if(shared.length>=8&&early>=6&&late===0&&early/shared.length>=.55)
-      return {px:-.5,samples:shared.length,runs:shared.length,reason:'shared-action-speed-consistent-early'};
-    if(!Array.isArray(samples))return empty;
-  }
+  if(!Array.isArray(samples))return empty;
   const unique=[...new Set(samples.map(x=>x.runId))].length;
   if(samples.length<AUTO_TUNE.minSamples||unique<AUTO_TUNE.minRuns)
     return {px:0,samples:samples.length,runs:unique,reason:'insufficient'};
   const late=samples.filter(x=>x.grade!=='perfect'&&x.direction==='late').length;
   const early=samples.filter(x=>x.grade!=='perfect'&&x.direction==='early').length;
   if(late>=AUTO_TUNE.minDirectional&&early===0&&late/samples.length>=AUTO_TUNE.directionalFraction)
-    return {px:AUTO_TUNE.maxPx,samples:samples.length,runs:unique,reason:'consistent-late'};
+    return {px:AUTO_TUNE.maxPx,samples:samples.length,runs:unique,reason:'exact-event-consistent-late'};
   if(early>=AUTO_TUNE.minDirectional&&late===0&&early/samples.length>=AUTO_TUNE.directionalFraction)
-    return {px:-AUTO_TUNE.maxPx,samples:samples.length,runs:unique,reason:'consistent-early'};
+    return {px:-AUTO_TUNE.maxPx,samples:samples.length,runs:unique,reason:'exact-event-consistent-early'};
   return {px:0,samples:samples.length,runs:unique,reason:'mixed-or-stable'};
 }
 
@@ -581,8 +591,9 @@ function saveRun(reason){
     clientDifferenceSec:recordedLapTimeSec!==null&&observedRaceDurationMs!==null?round(recordedLapTimeSec-observedRaceDurationMs/1000,3):null,
     warning:'Use recordedLapTimeSec from the game result/HUD; client elapsed is separate. A finish HUD value is not guaranteed to include all official penalties.'
   };
+  const observationCommitted=complete&&allEvents?commitCompletedObservations():false;
   const result={runId,version:VERSION,courseId,courseName,courseScope,vehicle:profileAtStart,vehicleKey:vehicleKey(profileAtStart),manualProfile:profile||null,
-    observationLearning:{mode:'confidence-gated',profileKey:observeState?.identity||null,runFeedback:observeRunCount,runGreat:observeRunGreat,totalProfileFeedback:observeState?.totalFeedback||0,autoCorrectionAppliedEvents:history.filter(x=>x.autoCorrectionPx!==0).length,minSamples:AUTO_TUNE.minSamples},traceCapture:{beforeFrames:TRACE_PRE,afterFrames:TRACE_POST,windowMs:TRACE_WINDOW_MS},
+    observationLearning:{mode:'completed-only-per-event',committed:observationCommitted,excludedReason:observationCommitted?null:!complete?'incomplete':!allEvents?'ungraded-events':'no-eligible-observation-or-storage-failed',profileKey:observeState?.identity||null,runFeedback:observeRunCount,runGreat:observeRunGreat,eligibleFeedback:history.filter(x=>x.autoLearningEligible).length,totalProfileFeedback:observeState?.totalFeedback||0,autoCorrectionAppliedEvents:history.filter(x=>x.autoCorrectionPx!==0).length,minSamples:AUTO_TUNE.minSamples},traceCapture:{beforeFrames:TRACE_PRE,afterFrames:TRACE_POST,windowMs:TRACE_WINDOW_MS},
     reason,complete,observedRaceDurationMs,observedRaceDurationSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),raceDurationSource:observedRaceDurationMs===null?null:'client-start-light-to-first-finish-phase',gameTiming,wheelLockResultEvidence:complete?wheelLockAtFinish:null,wheelLockObservations:wheelLockObservations.slice(),crossTrackFeedback:summarizeCrossTrackFeedback(),completionEvidence:{allEvents,allSegments,phase:root()?.dataset.phase||null},detectionHealth:{...detectionHealth},detectionAlerts:detectionAlerts.slice(),shortGapCoast:{enabled:true,guard:{...COAST_GUARD},triggeredCount:detectionHealth.coastTriggers},sparseBoostCoast:{enabled:true,guard:{...SPARSE_BOOST_GUARD},triggeredCount:detectionHealth.sparseBoostTriggers},ungradedEventKeys:history.filter(x=>x.feedbackGrade===null).map(x=>x.eventKey),time:new Date().toISOString(),
     events:history.length,grades,displayTopSpeedKmh:profileAtStart?.displayTopSpeedKmh??null,
     measuredMaxSpeedKmh:analysisMaxSpeed,meanAccelerationKmhPerSec:accel.length?round(accel.reduce((s,x)=>s+x,0)/accel.length,4):null,
