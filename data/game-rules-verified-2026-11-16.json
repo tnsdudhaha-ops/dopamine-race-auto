@@ -1,0 +1,519 @@
+{
+  "schema": "dopamine-race-game-rules-screenshot-v1",
+  "verifiedFrom": "16 user-supplied screenshots",
+  "capturedDate": "2026-11-16",
+  "sourceDocument": "GAME_RULES_VERIFIED.md",
+  "note": "Historic screenshots; newer official notices supersede earlier ones. Never assume these values remain current after a new patch.",
+  "levels": [
+    "R",
+    "S",
+    "SR",
+    "SSR"
+  ],
+  "patches": [
+    {
+      "announced": "2026-10-21",
+      "topic": "gameplay, random draw, enhancement",
+      "status": "historic where superseded"
+    },
+    {
+      "announced": "2026-10-30",
+      "topic": "designated purchase prices, dealer market values",
+      "status": "applied per screenshot"
+    },
+    {
+      "announced": "2026-11-09",
+      "topic": "time attack, special dealers",
+      "status": "notice"
+    },
+    {
+      "announced": "2026-11-15",
+      "topic": "enhancement probability, time-attack balance, new course",
+      "status": "applied per screenshot",
+      "newCourseStart": "2026-11-16T12:00:00+09:00"
+    }
+  ],
+  "vehiclePerformance": {
+    "unit": "km/h",
+    "type": "base_top_speed_before_tire_or_boost",
+    "stars": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "byGrade": {
+      "R": [
+        250,
+        254,
+        259,
+        263,
+        268
+      ],
+      "S": [
+        261,
+        265,
+        270,
+        274,
+        279
+      ],
+      "SR": [
+        271,
+        275,
+        280,
+        284,
+        289
+      ],
+      "SSR": [
+        282,
+        286,
+        291,
+        295,
+        300
+      ]
+    },
+    "sourceImage": 15
+  },
+  "judgmentDistances": {
+    "unit": "m",
+    "description": "symmetric absolute-distance thresholds shown by the game; exact inclusive-boundary behavior not verified",
+    "byGrade": {
+      "R": {
+        "perfect": 1.65,
+        "great": 4,
+        "good": 7,
+        "bad": 13,
+        "miss": "over_13"
+      },
+      "S": {
+        "perfect": 1.35,
+        "great": 3.5,
+        "good": 6,
+        "bad": 12,
+        "miss": "over_12"
+      },
+      "SR": {
+        "perfect": 1.05,
+        "great": 3,
+        "good": 5,
+        "bad": 11,
+        "miss": "over_11"
+      },
+      "SSR": {
+        "perfect": 0.75,
+        "great": 2,
+        "good": 4,
+        "bad": 10,
+        "miss": "over_10"
+      }
+    },
+    "appliesTo": [
+      "brakeOn",
+      "brakeOff",
+      "boostOn",
+      "boostOff"
+    ],
+    "sourceImage": 15
+  },
+  "tire": {
+    "maxQuantityPerType": 6,
+    "totalMaximum": 18,
+    "sharedBetween": [
+      "practice",
+      "flyingLap"
+    ],
+    "consumption": "one_tire_at_race_ready",
+    "dailyReset": "00:00 Asia/Seoul",
+    "carriesOver": false,
+    "override": "observed remaining quantity on game screen",
+    "effects": {
+      "hard": {
+        "straightTopSpeedPct": 5,
+        "cornerExitPct": -5,
+        "previousStraightTopSpeedPct": 3
+      },
+      "medium": {
+        "straightTopSpeedPct": 0,
+        "cornerExitPct": 0
+      },
+      "soft": {
+        "straightTopSpeedPct": -5,
+        "cornerExitPct": 5,
+        "previousStraightTopSpeedPct": -3
+      }
+    },
+    "sourceImages": [
+      12,
+      16
+    ]
+  },
+  "timeAttack": {
+    "daily": {
+      "practice": 5,
+      "flyingLap": 3,
+      "reset": "00:00 Asia/Seoul"
+    },
+    "start": "hold brake during five red lights, release when all turn off",
+    "controls": {
+      "brakeOn": "gold",
+      "brakeOff": "mint",
+      "boostOn": "red",
+      "boostOff": "red release",
+      "referenceLine": "white line in front of car"
+    },
+    "gameOnInterruption": "Attempt consumed, no record saved (2026-11-09 notice)",
+    "fastestLapFirstPlaceDailyEnergyReward": 1,
+    "courses": {
+      "뉘르부랄링": {
+        "announced": "2026-11-15",
+        "starts": "2026-11-16T12:00:00+09:00",
+        "noticeDetailedName": "뉘르부랄링-1",
+        "distanceM": 1956,
+        "cornerCount": 6,
+        "boostSectionCount": 3,
+        "derivedInputCount": 18,
+        "derivedInputCountStatus": "calculated as 2 actions per corner and boost zone, matches actual racing JSON",
+        "illustrativeSection": {
+          "label": "S2 우코너",
+          "lengthM": 96,
+          "brakeOnFromM": 55,
+          "brakeOffAtM": 74
+        }
+      },
+      "킹황로드": {
+        "announced": "2026-11-09",
+        "cornerCount": 8,
+        "boostSectionCount": 2,
+        "derivedInputCount": 20,
+        "derivedInputCountStatus": "inferred by same rule; not a measured run count in screenshot"
+      }
+    },
+    "boostFinishPenalty": {
+      "scope": "after boost end judgment line near finish",
+      "beforeFinish": {
+        "bad": 0,
+        "miss": 0
+      },
+      "afterFinish": {
+        "badSec": 0.5,
+        "missSec": 1
+      },
+      "uncertainty": "cumulative interaction with older +1s corner miss penalty unverified"
+    },
+    "sourceImages": [
+      10,
+      12,
+      13,
+      14,
+      15,
+      16
+    ]
+  },
+  "shop": {
+    "randomDraw": {
+      "costEnergy": 75,
+      "grades": {
+        "R": 0.43,
+        "S": 0.4,
+        "SR": 0.15,
+        "SSR": 0.02
+      },
+      "stars": {
+        "1": 0.55,
+        "2": 0.3,
+        "3": 0.15
+      },
+      "guaranteeEveryRandomDraws": 20,
+      "guarantee": "SSR star1 car, exact model selection method not verified",
+      "sourceImages": [
+        4,
+        6
+      ]
+    },
+    "designatedPurchase": {
+      "R": {
+        "costEnergy": 50,
+        "stars": 1,
+        "previousCostEnergy": 80
+      },
+      "S": {
+        "costEnergy": 100,
+        "stars": 1,
+        "previousCostEnergy": 130
+      },
+      "appliedOn": "2026-10-30",
+      "sourceImage": 6
+    },
+    "caveat": "2026-10-21 historical notice said SSR 6 models equal odds; another game catalog was later confirmed with 10 SSR models. Do not assume today's per-model probabilities."
+  },
+  "upgrade": {
+    "costEnergyPerAttempt": 10,
+    "material": {
+      "quantity": 1,
+      "requiresSameModel": true,
+      "materialStarsAffectSuccess": false,
+      "consumedOnFailure": true
+    },
+    "originalOnFailure": {
+      "vehicleRetained": true,
+      "starLevelRetained": true
+    },
+    "maxStars": 5,
+    "successPercentByGrade": {
+      "R": {
+        "1to2": 100,
+        "2to3": 100,
+        "3to4": 100,
+        "4to5": 90
+      },
+      "S": {
+        "1to2": 100,
+        "2to3": 100,
+        "3to4": 90,
+        "4to5": 80
+      },
+      "SR": {
+        "1to2": 100,
+        "2to3": 100,
+        "3to4": 80,
+        "4to5": 70
+      },
+      "SSR": {
+        "1to2": 100,
+        "2to3": 100,
+        "3to4": 60,
+        "4to5": 40
+      }
+    },
+    "exclusiveWheelsAtFiveStars": true,
+    "ssrWheelDesignChoices": [
+      "A",
+      "B"
+    ],
+    "cannotUpgradeActiveRaceCar": true,
+    "appliedOn": "2026-11-15",
+    "sourceImages": [
+      5,
+      11
+    ]
+  },
+  "market": {
+    "feePct": 5,
+    "observedFunctions": [
+      "buy_request_listing",
+      "sell_offer_listing",
+      "matching_purchase",
+      "completed_trade_history"
+    ],
+    "directVehicleSwapVerified": false,
+    "transactionsObserved": [
+      [
+        "2026-11-16 10:03",
+        "그레이트",
+        "갱서",
+        "R",
+        "두산 굴삭기",
+        2,
+        40
+      ],
+      [
+        "2026-11-16 09:43",
+        "갱서",
+        "ㅇ발",
+        "R",
+        "대우 다마스",
+        1,
+        32
+      ],
+      [
+        "2026-11-16 09:08",
+        "ㅇ발",
+        "킹황",
+        "R",
+        "현대 포터",
+        3,
+        85
+      ],
+      [
+        "2026-11-10 19:44",
+        "참돔",
+        "픡홀",
+        "R",
+        "현대 캐스퍼",
+        1,
+        32
+      ],
+      [
+        "2026-11-10 15:31",
+        "킹황",
+        "참돔",
+        "SR",
+        "테슬라 사이버트럭",
+        1,
+        100
+      ],
+      [
+        "2026-11-09 00:02",
+        "그레이트",
+        "ㅇ발",
+        "SR",
+        "BMW M3",
+        3,
+        300
+      ],
+      [
+        "2026-11-04 09:21",
+        "ㅇ발",
+        "참돔",
+        "SR",
+        "포르쉐 718",
+        1,
+        1
+      ],
+      [
+        "2026-11-04 09:20",
+        "참돔",
+        "ㅇ발",
+        "SR",
+        "BMW M3",
+        1,
+        1
+      ]
+    ],
+    "transactionColumnNames": [
+      "kst",
+      "seller",
+      "buyer",
+      "grade",
+      "model",
+      "stars",
+      "energy"
+    ],
+    "offersObservedAt": "2026-11-16 around 14:57 KST",
+    "buyRequests": [
+      {
+        "buyer": "갱서",
+        "grade": "R",
+        "model": "쉐보레 스파크",
+        "stars": 1,
+        "energy": 21
+      },
+      {
+        "buyer": "픡홀",
+        "grade": "S",
+        "model": "기아 스팅어",
+        "stars": 1,
+        "energy": 55
+      },
+      {
+        "buyer": "픡홀",
+        "grade": "S",
+        "model": "기아 스팅어",
+        "stars": 1,
+        "energy": 65
+      }
+    ],
+    "saleListings": [
+      {
+        "seller": "그레이트",
+        "grade": "R",
+        "model": "대우 티코",
+        "stars": 3,
+        "energy": 80
+      },
+      {
+        "seller": "그레이트",
+        "grade": "S",
+        "model": "현대 아이오닉 5",
+        "stars": 2,
+        "energy": 100
+      }
+    ],
+    "sourceImages": [
+      2,
+      3
+    ]
+  },
+  "dealers": {
+    "regularPriceRangesEnergy": {
+      "R": [
+        15,
+        30
+      ],
+      "S": [
+        35,
+        60
+      ],
+      "SR": [
+        65,
+        90
+      ],
+      "SSR": [
+        95,
+        200
+      ]
+    },
+    "evaluationsPerAccountDaily": 2,
+    "valuationValidThroughNextDay": true,
+    "revaluationReplacesPrevious": true,
+    "saleBurnsVehicle": true,
+    "upgradeOrStarNotCountedInPrice": true,
+    "special": {
+      "randomDrawsEachEvaluation": true,
+      "regularFiveDealersEachPct": 19.4,
+      "황영감": {
+        "appearancePct": 1.5,
+        "priceRule": "200% of regular highest price in same grade",
+        "byGrade": {
+          "R": 60,
+          "S": 120,
+          "SR": 180,
+          "SSR": 400
+        }
+      },
+      "초롱이": {
+        "appearancePct": 1.5,
+        "priceRule": "50% of regular lowest price in same grade, as displayed",
+        "byGrade": {
+          "R": 8,
+          "S": 18,
+          "SR": 33,
+          "SSR": 48
+        }
+      },
+      "immediateIrreversibleSale": true
+    },
+    "sourceImages": [
+      7,
+      8,
+      9
+    ]
+  },
+  "screenshotSources": {
+    "10": "1000023247.jpg",
+    "11": "1000023249.jpg",
+    "12": "1000023251.jpg",
+    "13": "1000023253.jpg",
+    "14": "1000023255.jpg",
+    "15": "1000023257.jpg",
+    "16": "1000023259.jpg",
+    "01": "1000023229.jpg",
+    "02": "1000023231.jpg",
+    "03": "1000023233.jpg",
+    "04": "1000023235.jpg",
+    "05": "1000023237.jpg",
+    "06": "1000023239.jpg",
+    "07": "1000023241.jpg",
+    "08": "1000023243.jpg",
+    "09": "1000023245.jpg"
+  },
+  "unresolved": [
+    "Exact catalog full model names from screenshot 01 are unreadable at 145 px width.",
+    "Current SSR model odds may differ from old notice referring to 6 models; latest separate catalog was reported as 10 models.",
+    "Whether the user can select the model in the every-20-draw SSR star1 chest.",
+    "Whether vehicle-for-vehicle direct swaps exist outside the shown market UI.",
+    "Exact condition for combined old corner MISS +1 sec and new end-of-boost +0.5/1 sec penalties.",
+    "Real-time updates after 2026-11-16 snapshot."
+  ]
+}
