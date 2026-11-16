@@ -1,5 +1,6 @@
 // Dopamine Unified UI runtime — loaded from pinned GitHub commit by the stable bootstrap.
 // This file is not a userscript. The bootstrap provides page window and GM upload functions.
+// UI revision: display GOOD/BAD/MISS explicitly while preserving the frozen GitHub bootstrap.
 (function () {
 'use strict';
 if(window.__dopamineUnifiedControl?.active)return;
@@ -108,7 +109,7 @@ q('#du-garage').textContent=busy?'🚗 갱신 중…':'🚗 차고 갱신';
 q('#du-garage').disabled=active||busy;
 q('#du-one').disabled=active||busy;q('#du-chain').disabled=active||busy;q('#du-stop').disabled=!active||!!a.stopAfterCurrent;q('#du-stop').textContent=a.stopAfterCurrent?'⏳ 완주 후 중지 예약':'■ 이번 판 후 중지';
 q('#du-race').hidden=view!=='race';q('#du-advanced').hidden=view!=='tools';q('#du-report').hidden=view!=='report';
-q('#du-race-status').textContent='AUTO v'+(a.version||'확인 중')+'\n코스: '+(a.courseName||'미확인')+'\n연속: '+(a.chainEnabled?a.chainState+' / '+a.chainRuns+'판':'대기')+'\nPERFECT '+(a.stats?.perfect||0)+' / GREAT '+(a.stats?.great||0)+'\n관찰학습: '+(a.learningProfileKey?'차량별 기록 중':'차량 인식 대기');
+q('#du-race-status').textContent='AUTO v'+(a.version||'확인 중')+'\n코스: '+(a.courseName||'미확인')+'\n연속: '+(a.chainEnabled?a.chainState+' / '+a.chainRuns+'판':'대기')+'\nPERFECT '+(a.stats?.perfect||0)+' / GREAT '+(a.stats?.great||0)+' / GOOD '+(a.stats?.good||0)+' / BAD '+(a.stats?.bad||0)+' / MISS '+(a.stats?.miss||0)+'\n관찰학습: '+(a.learningProfileKey?'차량별 기록 중':'차량 인식 대기');
 q('#du-status').textContent='GitHub 자동 로드 · AUTO v'+(a.version||'확인 중')+'\n'+(notice?notice+'\n':'')+(active?'AUTO 주행 중':'AUTO 대기')+(a.chainCounts?'\n타이어 H'+a.chainCounts.hard+' M'+a.chainCounts.medium+' S'+a.chainCounts.soft:'')+'\n'+(f.message||'차고 분석 대기');
 q('#du-cloud-state').textContent='☁ Google Sheets · '+cloudUploader.state().message;
 relocate();
