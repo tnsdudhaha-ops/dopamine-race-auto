@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.23
+// @version      3.3.24
 // @description  Release 3.0 / 기존 예측식 동결 / BAD 파싱·짧은 표식 관측 공백 보완 / 제한적 자동 보정
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
@@ -11,7 +11,7 @@
 // ==/UserScript==
 (() => {
 'use strict';
-const VERSION='3.3.23', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.24', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -505,7 +505,7 @@ $('#analysis-copy').onclick=async()=>setMessage(await copyText(JSON.stringify(re
 $('#analysis-download').onclick=()=>{const blob=new Blob([JSON.stringify(readSavedRuns(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='dopamine-v337-analysis.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);setMessage(readSavedRuns().length?'누적 분석 파일 저장 요청':'저장된 분석 기록이 없습니다. 주행 후 다시 시도하세요');};
 function render(){const cs=$('#chain-status');if(cs)cs.textContent='연속: '+(chainEnabled?'작동':'꺼짐')+' / '+chainState+' / 이번 실행 '+chainRuns+'판'+(chainCounts?'\n타이어 잔여 H:'+chainCounts.hard+' M:'+chainCounts.medium+' S:'+chainCounts.soft:'');const c=$('#course-name'),s=$('#status'),v=$('#vehicle-info');if(c)c.textContent=courseName+' ('+courseId+')\n프로필: '+(profile||'자동 관찰학습 (차량별)');if(v)v.textContent='인식: '+profileStatus+'\n차량: '+(detected.name||'미확인')+'\n등급: '+(detected.grade||'미확인')+' / 별: '+(detected.stars??'미확인')+'\n타이어: '+(detected.tire||'미확인')+'\n표시 최고속력: '+(detected.displayTopSpeedKmh??'미확인')+' km/h\n누적 주행: '+savedRunCount+'회';if(s)s.textContent=lastMessage+'\nBOOST ON: '+boostOnCount+' / OFF: '+boostOffCount+'\n다음: '+boostExpected+'\n마지막 감지: '+lastDetected+'\n판정: '+lastFeedback+'\nPERFECT: '+stats.perfect+' / GREAT: '+stats.great+' / GOOD: '+stats.good+' / BAD: '+stats.bad+' / MISS: '+stats.miss+'\n고속 보정 입력: '+universalStats.highSpeedEvents+'\n가속도 보정 입력: '+universalStats.accelerationUsed+'\n프레임: '+round(averageFrameMs,1)+'ms\n학습 보정: '+stats.adjusted+'회\n실측 최고속도: '+(analysisMaxSpeed===null?'미확인':analysisMaxSpeed+' km/h');const simpleState=$('#simple-state'),simpleTires=$('#simple-tires');if(simpleState)simpleState.textContent=stopAfterCurrent?'⏳ 완주 후 중지 예약':running?'🟢 주행 중':chainEnabled?'🔁 연속 주행':'대기 중';$('#stop-btn').textContent=stopAfterCurrent?'⏳ 완주 후 중지 예약':'■ 현재 판 후 중지';if(simpleTires)simpleTires.textContent=chainCounts?'H '+chainCounts.hard+' · M '+chainCounts.medium+' · S '+chainCounts.soft:'확인 전';mini.textContent=expanded?'✕ AUTO':running?'🟢 AUTO':'🚗 AUTO';}
 function setMessage(m){lastMessage=m;render();}
-function onResize(){placeUI();}function onPageHide(){if(chainEnabled)stopChain('페이지 이동으로 중지');else stop(false);}function destroy(){if(destroyed)return;destroyed=true;clearInterval(lobbyInfoTimer);if(chainEnabled)stopChain('스크립트 교체로 중지');else stop(false);window.removeEventListener('resize',onResize);window.removeEventListener('pagehide',onPageHide);ui.remove();if(window[INSTANCE]?.destroy===destroy)delete window[INSTANCE];}
+function onResize(){placeUI();}function onPageHide(){if(chainEnabled)stopChain('페이지 이동으로 중지');else stop(false);}function destroy(){if(destroyed)return;destroyed=true;clearInterval(lobbyInfoTimer);if(chainEnabled)stopChain('스크립트 교체로 중지');else stop(false);window.removeEventListener('resize',onResize);window.removeEventListener('pagehide',onPageHide);ui.remove();if(window[INSTANCE]?.destroy===destroy)delete window[INSTANCE];if(window.__duMode&&window.__duAuto)delete window.__duAuto;}
 const lobbyInfoTimer=setInterval(refreshLobbyInfo,1500);
-window.addEventListener('resize',onResize);window.addEventListener('pagehide',onPageHide);window[INSTANCE]={destroy};loadProfile();updateInputs();restorePosition();detectCourse();refreshVehicle();refreshLobbyInfo();collapsePanel();render();
+window.addEventListener('resize',onResize);window.addEventListener('pagehide',onPageHide);window[INSTANCE]={destroy};if(window.__duMode){window.__duAuto={state:()=>({version:VERSION,running,chainEnabled,chainRuns,chainState,chainCounts,lastMessage,courseName,stats:{...stats},stopAfterCurrent,learningMode:'confidence-gated',learningProfileKey:observeState?.identity||null})};}loadProfile();updateInputs();restorePosition();detectCourse();refreshVehicle();refreshLobbyInfo();collapsePanel();render();
 })();
