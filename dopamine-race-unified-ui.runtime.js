@@ -104,7 +104,7 @@ function say(m){notice=m;render();}
 function relocate(){const dialogs=[...document.querySelectorAll('dialog[open]')].filter(d=>d.getClientRects().length&&d.matches(':modal'));const target=dialogs[dialogs.length-1]||document.body;if(box.parentElement!==target)target.appendChild(box);}
 function render(){
 const a=getA(),f=getF(),active=!!(a.running||a.chainEnabled),busy=!!f.busy;
-const tm=a.lastRaceTiming;const lastTime=tm?.complete?(Number.isFinite(tm.resultTimeSec)?'게임 확정기록 '+tm.resultTimeSec.toFixed(3)+'초':Number.isFinite(tm.hudAtFinishSec)?'게임 랩타임 '+tm.hudAtFinishSec.toFixed(3)+'초 (공식 확정 미검증)':Number.isFinite(tm.clientElapsedSec)?'클라이언트 측정 '+tm.clientElapsedSec.toFixed(3)+'초 (참고)':'게임 표시 미검출'):'다음 완주부터 기록';
+const tm=a.lastRaceTiming;const lap=tm?.recordedLapTimeSec;const lastTime=tm?.complete?(Number.isFinite(lap)?(tm.recordedLapTimeSource==='game-explicit-result'?'게임 최종기록 ':'게임 HUD 랩타임 ')+lap.toFixed(3)+'초'+(tm.recordedLapTimeSource==='game-explicit-result'?'':' (공식 확정 미검증)'):Number.isFinite(tm.resultTimeSec)?'게임 최종기록 '+tm.resultTimeSec.toFixed(3)+'초':Number.isFinite(tm.hudAtFinishSec)?'게임 HUD 랩타임 '+tm.hudAtFinishSec.toFixed(3)+'초 (공식 확정 미검증)':Number.isFinite(tm.clientElapsedSec)?'클라이언트 측정 '+tm.clientElapsedSec.toFixed(3)+'초 (참고)':'게임 표시 미검출'):'다음 완주부터 기록';
 q('#du-auto').textContent=active?'🟢 AUTO 작동 중':'▶ AUTO 주행';
 q('#du-garage').textContent=busy?'🚗 갱신 중…':'🚗 차고 갱신';
 q('#du-garage').disabled=active||busy;
