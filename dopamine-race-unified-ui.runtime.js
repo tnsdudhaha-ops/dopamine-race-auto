@@ -104,12 +104,13 @@ function say(m){notice=m;render();}
 function relocate(){const dialogs=[...document.querySelectorAll('dialog[open]')].filter(d=>d.getClientRects().length&&d.matches(':modal'));const target=dialogs[dialogs.length-1]||document.body;if(box.parentElement!==target)target.appendChild(box);}
 function render(){
 const a=getA(),f=getF(),active=!!(a.running||a.chainEnabled),busy=!!f.busy;
+const tm=a.lastRaceTiming;const lastTime=tm?.complete?(Number.isFinite(tm.resultTimeSec)?'게임 확정기록 '+tm.resultTimeSec.toFixed(3)+'초':Number.isFinite(tm.hudAtFinishSec)?'게임 랩타임 '+tm.hudAtFinishSec.toFixed(3)+'초 (공식 확정 미검증)':Number.isFinite(tm.clientElapsedSec)?'클라이언트 측정 '+tm.clientElapsedSec.toFixed(3)+'초 (참고)':'게임 표시 미검출'):'다음 완주부터 기록';
 q('#du-auto').textContent=active?'🟢 AUTO 작동 중':'▶ AUTO 주행';
 q('#du-garage').textContent=busy?'🚗 갱신 중…':'🚗 차고 갱신';
 q('#du-garage').disabled=active||busy;
 q('#du-one').disabled=active||busy;q('#du-chain').disabled=active||busy;q('#du-stop').disabled=!active||!!a.stopAfterCurrent;q('#du-stop').textContent=a.stopAfterCurrent?'⏳ 완주 후 중지 예약':'■ 이번 판 후 중지';
 q('#du-race').hidden=view!=='race';q('#du-advanced').hidden=view!=='tools';q('#du-report').hidden=view!=='report';
-q('#du-race-status').textContent='AUTO v'+(a.version||'확인 중')+'\n코스: '+(a.courseName||'미확인')+'\n연속: '+(a.chainEnabled?a.chainState+' / '+a.chainRuns+'판':'대기')+'\nPERFECT '+(a.stats?.perfect||0)+' / GREAT '+(a.stats?.great||0)+' / GOOD '+(a.stats?.good||0)+' / BAD '+(a.stats?.bad||0)+' / MISS '+(a.stats?.miss||0)+'\n관찰학습: '+(a.learningProfileKey?'차량별 기록 중':'차량 인식 대기');
+q('#du-race-status').textContent='AUTO v'+(a.version||'확인 중')+'\n코스: '+(a.courseName||'미확인')+'\n연속: '+(a.chainEnabled?a.chainState+' / '+a.chainRuns+'판':'대기')+'\nPERFECT '+(a.stats?.perfect||0)+' / GREAT '+(a.stats?.great||0)+' / GOOD '+(a.stats?.good||0)+' / BAD '+(a.stats?.bad||0)+' / MISS '+(a.stats?.miss||0)+'\n관찰학습: '+(a.learningProfileKey?'차량별 기록 중':'차량 인식 대기')+'\n현재 게임 랩시계: '+(Number.isFinite(a.currentGameHudSec)?a.currentGameHudSec.toFixed(3)+'초':'미검출')+'\n지난 완주: '+lastTime;
 q('#du-status').textContent='GitHub 자동 로드 · AUTO v'+(a.version||'확인 중')+'\n'+(notice?notice+'\n':'')+(active?'AUTO 주행 중':'AUTO 대기')+(a.chainCounts?'\n타이어 H'+a.chainCounts.hard+' M'+a.chainCounts.medium+' S'+a.chainCounts.soft:'')+'\n'+(f.message||'차고 분석 대기');
 q('#du-cloud-state').textContent='☁ Google Sheets · '+cloudUploader.state().message;
 relocate();
