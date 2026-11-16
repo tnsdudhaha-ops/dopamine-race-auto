@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.25
-// @description  Release 3.0 / 예측식 동결 / BAD 기록·안전한 공백 추정·BOOST OFF 희소 관측 보완 / 조건부 학습
+// @version      3.3.26
+// @description  Release 3.0 / 예측식 동결 / 경기 시간·휠락 결과 관측·범용 학습 진단 기록
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
@@ -13,7 +13,7 @@
 'use strict';
 // Avoid duplicate driving engines when the stable unified GitHub loader is active.
 if(window.__duMode&&!window.__duUnifiedLoadingAuto)return;
-const VERSION='3.3.25', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.26', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -94,6 +94,85 @@ const stats={perfect:0,great:0,good:0,bad:0,miss:0,unmatched:0,adjusted:0,segmen
 const universalStats={highSpeedEvents:0,highSpeedPredictionUsed:0,accelerationUsed:0,accelerationRejected:0,accelerationSamples:0,fallbackCount:0,maximumSpeed:0,maximumAdvancePx:0,totalAdvancePx:0};
 function game(){try{return document.querySelector('iframe[title="타임어택"]')?.contentDocument||null;}catch(_){return null;}}
 function root(){return game()?.querySelector('#pedallap')||null;}
+
+// Universal measurement only. Never turn game meters into pixel timing without calibration.
+// HUD clock, final explicit result and client wall time are separate quantities.
+const RUN_CLOCK_POLL_MS=160,RUN_CLOCK_MAX_SAMPLES=100;
+let gameClockPoll=0,gameClockLast=null,gameClockAtFinish=null,gameClockSource=null,gameClockCount=0,gameClockTrace=[],wheelLockAtFinish=null,lastSavedTiming=null;
+function parseGameSeconds(raw){
+  const t=String(raw??'').trim();
+  if(!t||t.length>95||/최고\s*(?:기록|속력|속도)|랭킹|순위|best\s*lap/i.test(t))return null;
+  const m=t.match(/(?:^|[^\d])(?:(\d{1,2}):([0-5]\d)\.(\d{1,3})|(\d{1,3})\.(\d{1,3}))\s*(?:초|seconds?|sec\b|s\b)?/i);
+  if(!m)return null;
+  const sec=m[1]!==undefined?Number(m[1])*60+Number(m[2])+Number('0.'+m[3]):Number(m[4])+Number('0.'+m[5]);
+  return sec>=0&&sec<900&&Number.isFinite(sec)?Math.round(sec*1000)/1000:null;
+}
+function readGameClock(){
+  const r=root();if(!r)return null;
+  const direct=[...r.querySelectorAll('[data-lap-time],[data-race-time],[id*="lap-time"],[class*="lap-time"],[class*="lapTime"],[id*="lapTimer"],[class*="lapTimer"],[class*="race-timer"]')].slice(0,50);
+  for(const el of direct){
+    if(!visible(el))continue;
+    const t=textOf(el),attr=el.getAttribute('data-lap-time')||el.getAttribute('data-race-time');
+    for(const x of [attr,t]){const n=parseGameSeconds(x);if(n!==null)return {seconds:n,source:'game-hud-clock'};}
+  }
+  // Screenshot shows the current HUD widget labelled "랩타임 0.000초".
+  // Never use best-lap rankings or outer-page clocks.
+  for(const el of [...r.querySelectorAll('span,div,small,strong,b,p')].slice(0,350)){
+    if(!visible(el))continue;
+    const t=textOf(el);
+    if(t.length>95||!/랩\s*타임|주행\s*시간|lap\s*time/i.test(t)||/최고|BEST|순위|랭킹|기록실/i.test(t))continue;
+    const n=parseGameSeconds(t);if(n!==null)return {seconds:n,source:'game-hud-labeled-clock'};
+  }
+  return null;
+}
+function sampleGameClock(now,phase){
+  if(!started||now-gameClockPoll<RUN_CLOCK_POLL_MS)return;
+  gameClockPoll=now;
+  const r=readGameClock();if(!r)return;
+  if(gameClockLast!==null&&r.seconds+0.05<gameClockLast)return;
+  gameClockLast=r.seconds;gameClockSource=r.source;gameClockCount++;
+  const finished=/^(finished|finish|complete|completed|result|results|ended|end|done)$/.test(phase);
+  if(finished)gameClockAtFinish=r.seconds;
+  const last=gameClockTrace[gameClockTrace.length-1];
+  if(!last||now-last.atMs>=750||(finished&&last.phase!=='finished')){
+    gameClockTrace.push({atMs:Math.round(now),seconds:r.seconds,phase:finished?'finished':'running'});
+    if(gameClockTrace.length>RUN_CLOCK_MAX_SAMPLES)gameClockTrace.shift();
+  }
+}
+function readExplicitResultTime(){
+  const r=root();if(!r)return null;
+  for(const el of [...r.querySelectorAll('[class*="result"],[id*="result"],[class*="finish"],[id*="finish"],[data-result]')].slice(0,50)){
+    if(!visible(el))continue;
+    const t=textOf(el);
+    if(t.length>500)continue;
+    const m=t.match(/(?:최종\s*(?:랩\s*타임|기록|시간)|공식\s*(?:기록|시간)|확정\s*(?:기록|시간)|완주\s*(?:기록|시간)|final\s*(?:lap\s*time|time))\s*[:：]?\s*((?:\d{1,2}:)?\d{1,3}\.\d{1,3})\s*(?:초|s)?/i);
+    if(m){const seconds=parseGameSeconds(m[1]);if(seconds!==null)return {seconds,source:'game-result-explicit-final-label'};}
+  }
+  return null;
+}
+function readWheelLockResult(){
+  const r=root();if(!r)return {status:'not-readable',text:null};
+  for(const el of [...r.querySelectorAll('[class*="result"],[id*="result"],[class*="finish"],[id*="finish"],.feedback')].slice(0,65)){
+    if(!visible(el))continue;
+    const m=textOf(el).slice(0,650).match(/.{0,45}(?:휠\s*락|wheel\s*lock).{0,75}/i);
+    if(m)return {status:'explicit-wheel-lock-text',text:m[0]};
+  }
+  return {status:'not-observed',text:null}; // absence is not proof of no penalty
+}
+function summarizeCrossTrackFeedback(){
+  const result={byAction:{},byMarkerSpeedBand:{}};
+  for(const r of history){
+    const speed=!Number.isFinite(r.speed)?'unknown':r.speed<.08?'less-than-0.08':r.speed<.15?'0.08-0.15':r.speed<.23?'0.15-0.23':'over-0.23';
+    for(const [group,key] of [[result.byAction,r.type||'unknown'],[result.byMarkerSpeedBand,speed]]){
+      const b=group[key]||(group[key]={total:0,perfect:0,great:0,good:0,bad:0,miss:0,unmatched:0,early:0,late:0});
+      b.total++;
+      if(r.feedbackGrade&&Object.prototype.hasOwnProperty.call(b,r.feedbackGrade))b[r.feedbackGrade]++;else if(!r.feedbackGrade)b.unmatched++;
+      if(r.feedbackDirection==='early')b.early++;if(r.feedbackDirection==='late')b.late++;
+    }
+  }
+  return {mode:'observation-only',eventNumberIndependent:true,schema:'cross-track-v1',...result};
+}
+
 function send(selector,down){const doc=game(),el=doc?.querySelector(selector);if(!el)return false;try{const w=doc.defaultView;el.dispatchEvent(new w.PointerEvent(down?'pointerdown':'pointerup',{bubbles:true,cancelable:true,pointerId:1,pointerType:'touch',isPrimary:true,button:0,buttons:down?1:0}));return true;}catch(_){return false;}}
 function brake(down){if(brakeHeld===down)return true;if(!send('.cursor-interaction',down))return false;brakeHeld=down;return true;}
 function boost(down){if(boostHeld===down)return true;if(!send('.boost-key',down))return false;boostHeld=down;if(down)boostOnCount++;else boostOffCount++;return true;}
@@ -423,9 +502,12 @@ function saveRun(reason){
   const accel=analysisAccel.map(x=>x.accelKmhPerSec).filter(Number.isFinite).sort((a,b)=>a-b);
   const positive=accel.filter(x=>x>0);
   const median=a=>a.length?a[Math.floor(a.length/2)]:null;
+  const explicitResultTime=complete?readExplicitResultTime():null;
+  if(complete&&!wheelLockAtFinish)wheelLockAtFinish=readWheelLockResult();
+  const gameTiming={resultTimeSec:explicitResultTime?.seconds??null,resultTimeSource:explicitResultTime?.source??null,hudLastTimeSec:gameClockLast,hudAtFinishSec:complete?gameClockAtFinish:null,hudSource:gameClockSource,clockSampleCount:gameClockCount,hudClockTrace:gameClockTrace.slice(),clientDifferenceSec:explicitResultTime&&observedRaceDurationMs!==null?round(explicitResultTime.seconds-observedRaceDurationMs/1000,3):null,warning:'Only explicitly labelled final result is resultTimeSec; HUD and client time are different measurements.'};
   const result={runId,version:VERSION,courseId,courseName,courseScope,vehicle:profileAtStart,vehicleKey:vehicleKey(profileAtStart),manualProfile:profile||null,
     observationLearning:{mode:'confidence-gated',profileKey:observeState?.identity||null,runFeedback:observeRunCount,runGreat:observeRunGreat,totalProfileFeedback:observeState?.totalFeedback||0,autoCorrectionAppliedEvents:history.filter(x=>x.autoCorrectionPx!==0).length,minSamples:AUTO_TUNE.minSamples},traceCapture:{beforeFrames:TRACE_PRE,afterFrames:TRACE_POST,windowMs:TRACE_WINDOW_MS},
-    reason,complete,observedRaceDurationMs,observedRaceDurationSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),raceDurationSource:observedRaceDurationMs===null?null:'client-start-light-to-first-finish-phase',completionEvidence:{allEvents,allSegments,phase:root()?.dataset.phase||null},detectionHealth:{...detectionHealth},detectionAlerts:detectionAlerts.slice(),shortGapCoast:{enabled:true,guard:{...COAST_GUARD},triggeredCount:detectionHealth.coastTriggers},sparseBoostCoast:{enabled:true,guard:{...SPARSE_BOOST_GUARD},triggeredCount:detectionHealth.sparseBoostTriggers},ungradedEventKeys:history.filter(x=>x.feedbackGrade===null).map(x=>x.eventKey),time:new Date().toISOString(),
+    reason,complete,observedRaceDurationMs,observedRaceDurationSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),raceDurationSource:observedRaceDurationMs===null?null:'client-start-light-to-first-finish-phase',gameTiming,wheelLockResultEvidence:complete?wheelLockAtFinish:null,crossTrackFeedback:summarizeCrossTrackFeedback(),completionEvidence:{allEvents,allSegments,phase:root()?.dataset.phase||null},detectionHealth:{...detectionHealth},detectionAlerts:detectionAlerts.slice(),shortGapCoast:{enabled:true,guard:{...COAST_GUARD},triggeredCount:detectionHealth.coastTriggers},sparseBoostCoast:{enabled:true,guard:{...SPARSE_BOOST_GUARD},triggeredCount:detectionHealth.sparseBoostTriggers},ungradedEventKeys:history.filter(x=>x.feedbackGrade===null).map(x=>x.eventKey),time:new Date().toISOString(),
     events:history.length,grades,displayTopSpeedKmh:profileAtStart?.displayTopSpeedKmh??null,
     measuredMaxSpeedKmh:analysisMaxSpeed,meanAccelerationKmhPerSec:accel.length?round(accel.reduce((s,x)=>s+x,0)/accel.length,4):null,
     medianPositiveAccelerationKmhPerSec:median(positive),maxAccelerationKmhPerSec:accel.length?accel[accel.length-1]:null,
@@ -434,7 +516,7 @@ function saveRun(reason){
     history:history.map(x=>({...x})),feedbackLog:feedbackLog.map(x=>({...x})),segmentResults:segmentResults.map(x=>({...x})),
     speedSamples:analysisSamples.slice(),accelerationSamples:analysisAccel.slice()};
   runs.push(result);
-  try{localStorage.setItem(ANALYSIS_KEY,JSON.stringify(runs.slice(-MAX_RUNS)));runFinalized=true;savedRunCount=Math.min(runs.length,MAX_RUNS);}
+  try{localStorage.setItem(ANALYSIS_KEY,JSON.stringify(runs.slice(-MAX_RUNS)));runFinalized=true;savedRunCount=Math.min(runs.length,MAX_RUNS);lastSavedTiming={...gameTiming,clientElapsedSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),complete};}
   catch(_){setMessage('분석 저장 공간 부족: 분석 기록을 복사하여 백업하세요');}
 }
 function classify(r,g,b){if(Math.max(r,g,b)<95)return null;let bestType=null,bestDistance=Infinity;for(const [type,c] of Object.entries(COLORS)){const d=Math.hypot(r-c[0],g-c[1],b-c[2]);if(d<bestDistance){bestDistance=d;bestType=type;}}return bestDistance<=cfg.colorTolerance?bestType:null;}
@@ -516,6 +598,7 @@ function drive(now){
   if(started){
     updateTracks(scanBands(),now);connectFeedbackObserver();recordTelemetry(now);
     const phase=String(root()?.dataset.phase||'').toLowerCase();
+    sampleGameClock(now,phase);
     const explicitFinish=/^(finished|finish|complete|completed|result|results|ended|end|done)$/.test(phase);
     if(explicitFinish){
       if(!finishSeenAt){finishSeenAt=now;raceFinishedAtMs=now;finishReason='complete';}
@@ -526,7 +609,7 @@ function drive(now){
   raf=requestAnimationFrame(drive);
 }
 function stop(show=true,reason=null){const wasRunning=running;running=false;if(startTimer!==null){clearInterval(startTimer);startTimer=null;}if(raf!==null){cancelAnimationFrame(raf);raf=null;}brake(false);if(boostHeld){send('.boost-key',false);boostHeld=false;}feedbackObserver?.disconnect();feedbackObserver=null;feedbackElement=null;started=false;armed=false;tracks=[];if(wasRunning&&history.length)saveRun(reason||'stopped');if(show)setMessage('자동 플레이 중지');}
-function start(){stop(false);stopAfterCurrent=false;detectCourse();const doc=game();if(!doc){setMessage('타임어택 화면 없음');return;}if(root()?.dataset.phase!=='ready'){setMessage('게임 재시작 후 실행하세요');return;}refreshVehicle();profileAtStart=structuredCloneSafe(detected);prepareObservation(profileAtStart);running=true;started=false;armed=false;runId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);tracks=[];nextTrackId=1;eventSequence=0;lastFrameTime=0;averageFrameMs=16.67;boostOnCount=0;boostOffCount=0;boostExpected='boostOn';history.length=0;feedbackLog.length=0;segmentResults.length=0;detectionAlerts.length=0;for(const key of Object.keys(detectionHealth))detectionHealth[key]=0;analysisSamples=[];analysisAccel=[];analysisEvents=[];analysisLastTime=0;analysisLastSpeed=null;analysisLastSpeedTime=0;analysisMaxSpeed=null;runFinalized=false;finishSeenAt=0;finishReason=null;raceStartedAtMs=null;raceFinishedAtMs=null;telemetryRejects=0;for(const k of Object.keys(stats))stats[k]=0;for(const k of Object.keys(universalStats))universalStats[k]=0;lastFeedback='-';lastDetected='-';lastFeedbackText='';feedbackEmpty=true;connectFeedbackObserver();brake(true);setMessage('출발 신호 대기 중');const lights=[...doc.querySelectorAll('.lights i')];startTimer=setInterval(()=>{if(!running)return;const active=lights.filter(el=>{const rgb=doc.defaultView.getComputedStyle(el).backgroundColor.match(/\d+/g)?.map(Number);return rgb&&rgb[0]>110&&rgb[0]>rgb[1]*1.35&&rgb[0]>rgb[2]*1.35;}).length;if(active===5)armed=true;if(armed&&active===0){clearInterval(startTimer);startTimer=null;brake(false);raceStartedAtMs=performance.now();started=true;setMessage('자동 출발 성공');}},10);raf=requestAnimationFrame(drive);/* Keep panel state independent from driving. */}
+function start(){stop(false);stopAfterCurrent=false;detectCourse();const doc=game();if(!doc){setMessage('타임어택 화면 없음');return;}if(root()?.dataset.phase!=='ready'){setMessage('게임 재시작 후 실행하세요');return;}refreshVehicle();profileAtStart=structuredCloneSafe(detected);prepareObservation(profileAtStart);running=true;started=false;armed=false;runId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);tracks=[];nextTrackId=1;eventSequence=0;lastFrameTime=0;averageFrameMs=16.67;boostOnCount=0;boostOffCount=0;boostExpected='boostOn';history.length=0;feedbackLog.length=0;segmentResults.length=0;detectionAlerts.length=0;for(const key of Object.keys(detectionHealth))detectionHealth[key]=0;analysisSamples=[];analysisAccel=[];analysisEvents=[];analysisLastTime=0;analysisLastSpeed=null;analysisLastSpeedTime=0;analysisMaxSpeed=null;runFinalized=false;finishSeenAt=0;finishReason=null;raceStartedAtMs=null;raceFinishedAtMs=null;telemetryRejects=0;gameClockPoll=0;gameClockLast=null;gameClockAtFinish=null;gameClockSource=null;gameClockCount=0;gameClockTrace=[];wheelLockAtFinish=null;for(const k of Object.keys(stats))stats[k]=0;for(const k of Object.keys(universalStats))universalStats[k]=0;lastFeedback='-';lastDetected='-';lastFeedbackText='';feedbackEmpty=true;connectFeedbackObserver();brake(true);setMessage('출발 신호 대기 중');const lights=[...doc.querySelectorAll('.lights i')];startTimer=setInterval(()=>{if(!running)return;const active=lights.filter(el=>{const rgb=doc.defaultView.getComputedStyle(el).backgroundColor.match(/\d+/g)?.map(Number);return rgb&&rgb[0]>110&&rgb[0]>rgb[1]*1.35&&rgb[0]>rgb[2]*1.35;}).length;if(active===5)armed=true;if(armed&&active===0){clearInterval(startTimer);startTimer=null;brake(false);raceStartedAtMs=performance.now();started=true;setMessage('자동 출발 성공');}},10);raf=requestAnimationFrame(drive);/* Keep panel state independent from driving. */}
 function structuredCloneSafe(o){return JSON.parse(JSON.stringify(o||{}));}
 const ui=document.createElement('div');ui.id='dopamine-auto-v336-ui';ui.style.cssText='position:fixed;left:0;top:0;width:0;height:0;z-index:2147483647;font:12px system-ui,sans-serif;color:white;pointer-events:none';
 ui.innerHTML=`<style>#dopamine-auto-v336-ui *{box-sizing:border-box}#dopamine-auto-v336-ui button{color:white;border:0;font-weight:700;cursor:pointer;font-family:inherit}#dopamine-auto-v336-ui .panel{display:none;position:fixed;width:248px;max-width:calc(100vw - 16px);background:#142034;border:1px solid #64748b;border-radius:12px 12px 0 12px;box-shadow:0 5px 25px #000a;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;touch-action:pan-y;pointer-events:auto;padding:10px}#dopamine-auto-v336-ui .mini{position:fixed;width:94px;height:42px;display:flex;align-items:center;justify-content:center;background:#17283d;border:1px solid #64748b;border-radius:24px;box-shadow:0 3px 15px #0008;user-select:none;touch-action:none;pointer-events:auto;padding:0;white-space:nowrap}#dopamine-auto-v336-ui .head-title{font-size:12px;font-weight:800;margin-bottom:6px}#dopamine-auto-v336-ui .course{color:#93c5fd;font-size:10px;margin:5px 0;overflow-wrap:anywhere;white-space:pre-wrap}#dopamine-auto-v336-ui .actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}#dopamine-auto-v336-ui .actions button{padding:9px 5px;border-radius:6px}#dopamine-auto-v336-ui .start{background:#15803d}#dopamine-auto-v336-ui .stop{background:#b91c1c}#dopamine-auto-v336-ui .stats{font-size:10px;line-height:1.5;color:#dbeafe;white-space:pre-wrap;overflow-wrap:anywhere}#dopamine-auto-v336-ui details{margin-top:7px;border-top:1px solid #475569;padding-top:7px}#dopamine-auto-v336-ui summary{color:#93c5fd;font-weight:700;cursor:pointer;padding:4px 0}#dopamine-auto-v336-ui label{display:block;margin:7px 0 3px;color:#cbd5e1;font-size:10px}#dopamine-auto-v336-ui input{display:block;width:100%;padding:7px;background:#1e293b;color:white;border:1px solid #64748b;border-radius:5px;font-size:12px}#dopamine-auto-v336-ui .subbutton{width:100%;margin-top:7px;padding:9px;border-radius:6px;background:#2563eb}#dopamine-auto-v336-ui .reset{background:#475569}#dopamine-auto-v336-ui .hint{font-size:10px;color:#fcd34d;line-height:1.4;margin:5px 0}#dopamine-auto-v336-ui .auto-head{display:flex;justify-content:space-between;align-items:center;gap:5px;margin-bottom:10px;font-size:12px}#dopamine-auto-v336-ui .auto-head button{background:#334155;border-radius:7px;padding:6px 10px;font-size:17px}#dopamine-auto-v336-ui .auto-line{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:8px 0;font-size:11px}#dopamine-auto-v336-ui .auto-line>span:first-child{color:#94a3b8}#dopamine-auto-v336-ui #manage-area{margin-top:10px;border-top:1px solid #475569;padding-top:8px}#dopamine-auto-v336-ui #cloud-config-slot button{position:static!important;width:100%;margin-top:7px;padding:9px;background:#164e63;border:1px solid #67e8f9;border-radius:6px}#dopamine-auto-v336-ui .panel{width:248px}#dopamine-auto-v336-ui .tabs{display:flex;gap:5px;margin:5px 0 10px}#dopamine-auto-v336-ui .tabs button{flex:1;background:#334155;border-radius:7px;padding:9px 3px;font-size:11px}#dopamine-auto-v336-ui .tabs button.active{background:#2563eb}#dopamine-auto-v336-ui .analysis-box{font-size:11px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;color:#dbeafe}</style><div class="panel" id="auto-panel"><div class="auto-head"><strong>🚗 DOPAMINE AUTO <span style="font-size:10px;color:#94a3b8">v${VERSION}</span></strong><button id="manage-btn" aria-label="관리 메뉴 열기" title="관리 메뉴">⚙</button></div><div class="tabs"><button id="tab-auto" class="active">🏎️ AUTO</button><button id="tab-analysis">📊 차량 분석</button></div><div id="auto-tab"><div class="auto-line"><span>상태</span><strong id="simple-state">대기 중</strong></div><div class="auto-line"><span>잔여 타이어</span><strong id="simple-tires">확인 전</strong></div><div class="actions"><button class="start" id="start-btn">▶ 1판 시작</button><button class="stop" id="stop-btn">■ 현재 판 후 중지</button></div><button class="subbutton" id="chain-btn" style="background:#0f766e">🔁 잔여 타이어 모두 주행</button><div class="auto-line" style="margin-top:8px"><span>☁ Google Sheets</span><span id="cloud-state">로더에서 확인</span></div><div id="manage-area" style="display:none"><div class="course" id="course-name">코스 분석 대기</div><div class="stats" id="chain-status"></div><div class="stats" id="status">대기 중</div><div class="stats" id="vehicle-info"></div><p class="hint">자동 인식은 화면 DOM 확인이 필요합니다.</p><button class="subbutton" id="detect-btn">🔍 차량·타이어 다시 읽기</button><button class="subbutton" id="analysis-copy">📊 누적 분석 JSON 복사</button><button class="subbutton" id="analysis-download">💾 누적 분석 JSON 저장</button><button class="subbutton" id="copy-btn">📋 현재 입력 기록 복사</button><button class="subbutton reset" id="force-stop-btn">⛔ 긴급 즉시 중지</button><div id="cloud-config-slot"></div><details id="settings-details"><summary>⚙ 고급 설정</summary><label>기존 수동 프로필 (학습 보정 키)</label><input id="vehicleProfile" type="text" placeholder="비우면 기존 학습 보정 비활성"><label>브레이크 판정선 Y</label><input id="brakeY" type="number"><label>부스터 판정선 Y</label><input id="boostY" type="number"><label>브레이크 보정 px</label><input id="brakeOffset" type="number"><label>부스터 보정 px</label><input id="boostOffset" type="number"><label>예측 시간 ms</label><input id="predictionMs" type="number"><label>부스터 구간 수 (0=자동)</label><input id="boostZones" type="number"><label>색상 허용 오차</label><input id="colorTolerance" type="number"><label>판정 허용 오차 px</label><input id="tolerance" type="number"><button class="subbutton" id="save-btn">설정 저장</button><button class="subbutton reset" id="reset-btn">기본 설정 복원</button></details></div></div><div id="analysis-tab" style="display:none"><div class="analysis-box" id="analysis-summary">기록 분석 대기</div><button class="subbutton" id="analysis-refresh">🔄 분석 새로고침</button><button class="subbutton" id="analysis-copy2">📋 누적 기록 복사</button></div></div><button class="mini" id="auto-mini">🚗 AUTO</button>`;
@@ -569,5 +652,5 @@ function render(){const cs=$('#chain-status');if(cs)cs.textContent='연속: '+(c
 function setMessage(m){lastMessage=m;render();}
 function onResize(){placeUI();}function onPageHide(){if(chainEnabled)stopChain('페이지 이동으로 중지');else stop(false);}function destroy(){if(destroyed)return;destroyed=true;clearInterval(lobbyInfoTimer);if(chainEnabled)stopChain('스크립트 교체로 중지');else stop(false);window.removeEventListener('resize',onResize);window.removeEventListener('pagehide',onPageHide);ui.remove();if(window[INSTANCE]?.destroy===destroy)delete window[INSTANCE];if(window.__duMode&&window.__duAuto)delete window.__duAuto;}
 const lobbyInfoTimer=setInterval(refreshLobbyInfo,1500);
-window.addEventListener('resize',onResize);window.addEventListener('pagehide',onPageHide);window[INSTANCE]={destroy};if(window.__duMode){window.__duAuto={state:()=>({version:VERSION,running,chainEnabled,chainRuns,chainState,chainCounts,lastMessage,courseName,stats:{...stats},stopAfterCurrent,learningMode:'confidence-gated',learningProfileKey:observeState?.identity||null})};}loadProfile();updateInputs();restorePosition();detectCourse();refreshVehicle();refreshLobbyInfo();collapsePanel();render();
+window.addEventListener('resize',onResize);window.addEventListener('pagehide',onPageHide);window[INSTANCE]={destroy};if(window.__duMode){window.__duAuto={state:()=>({version:VERSION,running,chainEnabled,chainRuns,chainState,chainCounts,lastMessage,courseName,stats:{...stats},stopAfterCurrent,learningMode:'confidence-gated',learningProfileKey:observeState?.identity||null,lastRaceTiming:lastSavedTiming,currentGameHudSec:gameClockLast})};}loadProfile();updateInputs();restorePosition();detectCourse();refreshVehicle();refreshLobbyInfo();collapsePanel();render();
 })();
