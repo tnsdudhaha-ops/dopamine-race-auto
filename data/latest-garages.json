@@ -1,15 +1,22 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-15T23:53:40.439Z",
+  "generatedAt": "2026-11-16T00:12:44.466Z",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-15T21:30:42.964Z",
-      "modelCount": 9,
+      "updatedAt": "2026-11-16T00:12:36.741Z",
+      "modelCount": 10,
       "vehicleCount": 13,
       "vehicles": [
+        {
+          "grade": "SSR",
+          "model": "테슬라 로드스터",
+          "maxStars": 1,
+          "quantity": 1,
+          "starBreakdown": []
+        },
         {
           "grade": "SR",
           "model": "BMW M3",
@@ -35,6 +42,13 @@
           "grade": "S",
           "model": "제네시스 G70",
           "maxStars": 2,
+          "quantity": 1,
+          "starBreakdown": []
+        },
+        {
+          "grade": "S",
+          "model": "현대 싼타페",
+          "maxStars": 1,
           "quantity": 1,
           "starBreakdown": []
         },
@@ -71,22 +85,6 @@
         {
           "grade": "R",
           "model": "대우 티코",
-          "maxStars": 2,
-          "quantity": 2,
-          "starBreakdown": [
-            {
-              "stars": 2,
-              "qty": 1
-            },
-            {
-              "stars": 1,
-              "qty": 1
-            }
-          ]
-        },
-        {
-          "grade": "R",
-          "model": "현대 포터",
           "maxStars": 2,
           "quantity": 2,
           "starBreakdown": [
@@ -361,9 +359,9 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-15T06:07:07.016Z",
+      "updatedAt": "2026-11-16T00:12:42.693Z",
       "modelCount": 7,
-      "vehicleCount": 8,
+      "vehicleCount": 9,
       "vehicles": [
         {
           "grade": "SSR",
@@ -410,9 +408,13 @@
         {
           "grade": "R",
           "model": "현대 포터",
-          "maxStars": 1,
-          "quantity": 2,
+          "maxStars": 3,
+          "quantity": 3,
           "starBreakdown": [
+            {
+              "stars": 3,
+              "qty": 1
+            },
             {
               "stars": 1,
               "qty": 2
