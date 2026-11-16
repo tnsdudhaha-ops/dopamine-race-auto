@@ -1,14 +1,14 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-16T00:12:44.466Z",
+  "generatedAt": "2026-11-16T05:11:58.695Z",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-16T00:12:36.741Z",
+      "updatedAt": "2026-11-16T05:11:51.373Z",
       "modelCount": 10,
-      "vehicleCount": 13,
+      "vehicleCount": 11,
       "vehicles": [
         {
           "grade": "SSR",
@@ -69,18 +69,9 @@
         {
           "grade": "R",
           "model": "대우 다마스",
-          "maxStars": 2,
-          "quantity": 3,
-          "starBreakdown": [
-            {
-              "stars": 2,
-              "qty": 1
-            },
-            {
-              "stars": 1,
-              "qty": 2
-            }
-          ]
+          "maxStars": 5,
+          "quantity": 1,
+          "starBreakdown": []
         },
         {
           "grade": "R",
@@ -102,9 +93,9 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-15T06:07:02.699Z",
+      "updatedAt": "2026-11-16T05:11:52.816Z",
       "modelCount": 11,
-      "vehicleCount": 12,
+      "vehicleCount": 11,
       "vehicles": [
         {
           "grade": "SSR",
@@ -173,17 +164,8 @@
           "grade": "R",
           "model": "두산 굴삭기",
           "maxStars": 5,
-          "quantity": 2,
-          "starBreakdown": [
-            {
-              "stars": 5,
-              "qty": 1
-            },
-            {
-              "stars": 2,
-              "qty": 1
-            }
-          ]
+          "quantity": 1,
+          "starBreakdown": []
         },
         {
           "grade": "R",
@@ -359,9 +341,9 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-16T00:12:42.693Z",
+      "updatedAt": "2026-11-16T05:11:56.951Z",
       "modelCount": 7,
-      "vehicleCount": 9,
+      "vehicleCount": 7,
       "vehicles": [
         {
           "grade": "SSR",
@@ -408,38 +390,22 @@
         {
           "grade": "R",
           "model": "현대 포터",
-          "maxStars": 3,
-          "quantity": 3,
-          "starBreakdown": [
-            {
-              "stars": 3,
-              "qty": 1
-            },
-            {
-              "stars": 1,
-              "qty": 2
-            }
-          ]
+          "maxStars": 5,
+          "quantity": 1,
+          "starBreakdown": []
         }
       ]
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-15T23:53:40.084Z",
-      "modelCount": 12,
-      "vehicleCount": 13,
+      "updatedAt": "2026-11-16T05:11:58.337Z",
+      "modelCount": 10,
+      "vehicleCount": 12,
       "vehicles": [
         {
           "grade": "SR",
           "model": "캐터필러 불도저",
           "maxStars": 2,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "S",
-          "model": "쉐보레 말리부",
-          "maxStars": 1,
           "quantity": 1,
           "starBreakdown": []
         },
@@ -480,17 +446,19 @@
         },
         {
           "grade": "R",
-          "model": "대우 다마스",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "R",
           "model": "두산 굴삭기",
           "maxStars": 3,
-          "quantity": 1,
-          "starBreakdown": []
+          "quantity": 2,
+          "starBreakdown": [
+            {
+              "stars": 3,
+              "qty": 1
+            },
+            {
+              "stars": 2,
+              "qty": 1
+            }
+          ]
         },
         {
           "grade": "R",
