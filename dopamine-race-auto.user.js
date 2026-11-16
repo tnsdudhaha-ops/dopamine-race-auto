@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.22
-// @description  Release 3.0 / 예측식 동결 / 새 트랙 표식 검증·프레임 진단 / 증거기반 제한적 자동 보정
+// @version      3.3.23
+// @description  Release 3.0 / 기존 예측식 동결 / BAD 파싱·짧은 표식 관측 공백 보완 / 제한적 자동 보정
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
@@ -11,13 +11,15 @@
 // ==/UserScript==
 (() => {
 'use strict';
-const VERSION='3.3.22', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.23', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
 const LABELS={brakeOn:'브레이크 ON',brakeOff:'브레이크 OFF',boostOn:'BOOST ON',boostOff:'BOOST OFF'};
 const ENGINE={frameFactor:.35,maxAdaptiveMs:8,maxPredictionPx:5,maxFrameMs:80,maxSpeed:1.5,feedbackWindowMs:1200,maxHistory:400,highSpeedStart:.15,highSpeedFull:.23,maxHighSpeedAdvancePx:1.25,frameLookaheadFactor:.30,accelerationMinSamples:4,accelerationMaxAbs:.006,accelerationStableThreshold:.002,accelerationSmoothing:.25,accelerationMaxPx:.45,repeatRequired:2,correctionStep:.5,maxCorrection:3};
 const DETECTION_GUARD={lateSpawnSlackPx:8,trackGapMs:80,rafGapMs:80,maxAlerts:80};
+// Guarded missing-scan prediction, separate from the frozen Release 3.0 predict().
+const COAST_GUARD={minObservations:8,minSpeed:.04,maxSpeed:.36,minTrace:4,maxRecentGapMs:55,maxPriorGapMs:50,maxAgeMs:70,nearTriggerPx:20,maxPredictedOvershootPx:4.5,maxSpeedSpread:.07,maxTrackSpeedDiscrepancy:.065};
 const AUTO_TUNE={minSamples:8,minRuns:6,minDirectional:5,directionalFraction:.55,maxPx:.5};
 const SETTINGS_PREFIX='dopamine-auto-v32:',POSITION_KEY='dopamine-auto:position-v328',LEARNING_PREFIX='dopamine-auto-v335:learning:',PROFILE_KEY='dopamine-auto-v335:profile';
 const ANALYSIS_KEY='dopamine-auto-v336:runs', MAX_RUNS=120, MAX_SAMPLES=4000;
@@ -25,8 +27,8 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), round=(v,n=3)=>Number((Number(v)
 let raceStartedAtMs=null,raceFinishedAtMs=null;
 let cfg={...DEFAULTS},courseId='default',courseName='기본 코스',courseScope='default',profile='',running=false,started=false,armed=false,destroyed=false,brakeHeld=false,boostHeld=false,boostExpected='boostOn',boostOnCount=0,boostOffCount=0,eventSequence=0,nextTrackId=1,tracks=[],lastFrameTime=0,averageFrameMs=16.67,raf=null,startTimer=null,feedbackObserver=null,feedbackElement=null,lastFeedbackText='',feedbackEmpty=true,lastMessage='대기 중',lastDetected='-',lastFeedback='-',runId='',profileAtStart=null,analysisLastTime=0,analysisLastSpeed=null,analysisLastSpeedTime=0,analysisMaxSpeed=null,analysisSamples=[],analysisAccel=[],analysisEvents=[],profileStatus='미확인';
 const history=[],feedbackLog=[],segmentResults=[],correction={},evidence={},detectionAlerts=[];
-const detectionHealth={lateSpawns:0,trackLongGaps:0,rafLongGaps:0,maxTrackGapMs:0,maxRafGapMs:0};
-const stats={perfect:0,great:0,good:0,miss:0,unmatched:0,adjusted:0,segmentResults:0};
+const detectionHealth={lateSpawns:0,trackLongGaps:0,rafLongGaps:0,maxTrackGapMs:0,maxRafGapMs:0,coastTriggers:0};
+const stats={perfect:0,great:0,good:0,bad:0,miss:0,unmatched:0,adjusted:0,segmentResults:0};
 const universalStats={highSpeedEvents:0,highSpeedPredictionUsed:0,accelerationUsed:0,accelerationRejected:0,accelerationSamples:0,fallbackCount:0,maximumSpeed:0,maximumAdvancePx:0,totalAdvancePx:0};
 function game(){try{return document.querySelector('iframe[title="타임어택"]')?.contentDocument||null;}catch(_){return null;}}
 function root(){return game()?.querySelector('#pedallap')||null;}
@@ -62,7 +64,7 @@ function observeFeedback(record,parsed){
   if(!observeState||!record||!parsed?.grade)return;
   const band=record.speed>=.19?'high':record.speed>=.12?'medium':'low';
   const key=record.eventKey+'|'+band;
-  const entry=observeState.events[key]||{samples:0,perfect:0,great:0,good:0,miss:0,late:0,early:0,measuredDistanceCount:0,signedDistanceSumM:0,speedSumPxMs:0,firstRunId:runId,lastRunId:runId};
+  const entry=observeState.events[key]||{samples:0,perfect:0,great:0,good:0,bad:0,miss:0,late:0,early:0,measuredDistanceCount:0,signedDistanceSumM:0,speedSumPxMs:0,firstRunId:runId,lastRunId:runId};
   entry.samples++;
   entry[parsed.grade]=(entry[parsed.grade]||0)+1;
   if(parsed.direction==='late'||parsed.direction==='early'){
@@ -80,7 +82,7 @@ function observeFeedback(record,parsed){
   // Only high-quality, uniquely matched events count toward automatic timing correction.
   // The observation-only counters above retain all matched feedback for diagnostics.
   const quality=record.observationCount>=3&&record.firstSeenY<record.triggerLineY-DETECTION_GUARD.lateSpawnSlackPx
-    &&record.maxObservationGapMs<=DETECTION_GUARD.trackGapMs&&!record.lateSpawnSuppressed;
+    &&record.maxObservationGapMs<=DETECTION_GUARD.trackGapMs&&!record.lateSpawnSuppressed&&record.triggerSource!=='short-gap-coast';
   if(quality){
     const recent=Array.isArray(entry.qualityRecent)?entry.qualityRecent:[];
     if(!recent.some(v=>v.runId===runId)){
@@ -110,6 +112,50 @@ function autoLeadPreview(eventKey,speed){
   if(early>=AUTO_TUNE.minDirectional&&late===0&&early/samples.length>=AUTO_TUNE.directionalFraction)
     return {px:-AUTO_TUNE.maxPx,samples:samples.length,runs:unique,reason:'consistent-early'};
   return {px:0,samples:samples.length,runs:unique,reason:'mixed-or-stable'};
+}
+
+function evaluateShortGapCoast(track,now) {
+  if(track.triggered||track.suppressed||track.observationCount<COAST_GUARD.minObservations)return null;
+  const age=now-track.lastTime;
+  if(!(age>0&&age<=COAST_GUARD.maxAgeMs)||track.missing>4)return null;
+  if(track.lastObservationGapMs>COAST_GUARD.maxPriorGapMs)return null;
+  if(!(track.speed>=COAST_GUARD.minSpeed&&track.speed<=COAST_GUARD.maxSpeed))return null;
+  const samples=track.traceWindow?.slice(-COAST_GUARD.minTrace)||[];
+  if(samples.length<COAST_GUARD.minTrace)return null;
+  const speeds=[];
+  for(let i=1;i<samples.length;i++){
+    const dt=samples[i].t-samples[i-1].t,dy=samples[i].y-samples[i-1].y;
+    if(!(dt>0&&dt<=COAST_GUARD.maxRecentGapMs&&dy>0))return null;
+    speeds.push(dy/dt);
+  }
+  if(Math.max(...speeds)-Math.min(...speeds)>COAST_GUARD.maxSpeedSpread)return null;
+  const sorted=[...speeds].sort((a,b)=>a-b),median=sorted[Math.floor(sorted.length/2)];
+  if(Math.abs(track.speed-median)>COAST_GUARD.maxTrackSpeedDiscrepancy)return null;
+  const boost=track.type.startsWith('boost');
+  const target=boost?cfg.boostY:cfg.brakeY,offset=boost?cfg.boostOffset:cfg.brakeOffset;
+  const triggerLine=target-cfg.tolerance;
+  if(track.y>=triggerLine||triggerLine-track.y>COAST_GUARD.nearTriggerPx)return null;
+  const key=track.type+':'+(eventSequence+1),prediction=predict(track);
+  const autoLead=autoLeadPreview(key,track.speed);
+  const estimate=track.y+track.speed*age;
+  const predictedY=estimate+prediction.predictionPx+offset+(correction[key]||0)+autoLead.px;
+  const overshoot=predictedY-triggerLine;
+  if(overshoot<0||overshoot>COAST_GUARD.maxPredictedOvershootPx)return null;
+  return {key,prediction,autoLead,target,predictedY,meta:{
+    source:'short-gap-coast',gapMs:round(age,2),estimatedMarkerY:round(estimate,2),
+    observedMarkerY:round(track.y,2),medianRecentSpeed:round(median,5),
+    predictedOvershootPx:round(overshoot,3)
+  }};
+}
+function tryShortGapCoast(track,now){
+  const candidate=evaluateShortGapCoast(track,now);
+  if(!candidate)return false;
+  const ok=executeEvent(track,candidate.predictedY,candidate.prediction,candidate.key,candidate.target,candidate.autoLead,candidate.meta);
+  if(!ok)return false;
+  track.triggered=true;
+  detectionHealth.coastTriggers++;
+  recordDetectionAlert('short-gap-coast-trigger',track,now,{eventKey:candidate.key,...candidate.meta});
+  return true;
 }
 function shouldSuppressLateSpawn(firstY,triggerLineY){
   return firstY>triggerLineY+DETECTION_GUARD.lateSpawnSlackPx;
@@ -317,7 +363,7 @@ function saveRun(reason){
   const median=a=>a.length?a[Math.floor(a.length/2)]:null;
   const result={runId,version:VERSION,courseId,courseName,courseScope,vehicle:profileAtStart,vehicleKey:vehicleKey(profileAtStart),manualProfile:profile||null,
     observationLearning:{mode:'confidence-gated',profileKey:observeState?.identity||null,runFeedback:observeRunCount,runGreat:observeRunGreat,totalProfileFeedback:observeState?.totalFeedback||0,autoCorrectionAppliedEvents:history.filter(x=>x.autoCorrectionPx!==0).length,minSamples:AUTO_TUNE.minSamples},traceCapture:{beforeFrames:TRACE_PRE,afterFrames:TRACE_POST,windowMs:TRACE_WINDOW_MS},
-    reason,complete,observedRaceDurationMs,observedRaceDurationSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),raceDurationSource:observedRaceDurationMs===null?null:'client-start-light-to-first-finish-phase',completionEvidence:{allEvents,allSegments,phase:root()?.dataset.phase||null},detectionHealth:{...detectionHealth},detectionAlerts:detectionAlerts.slice(),ungradedEventKeys:history.filter(x=>x.feedbackGrade===null).map(x=>x.eventKey),time:new Date().toISOString(),
+    reason,complete,observedRaceDurationMs,observedRaceDurationSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),raceDurationSource:observedRaceDurationMs===null?null:'client-start-light-to-first-finish-phase',completionEvidence:{allEvents,allSegments,phase:root()?.dataset.phase||null},detectionHealth:{...detectionHealth},detectionAlerts:detectionAlerts.slice(),shortGapCoast:{enabled:true,guard:{...COAST_GUARD},triggeredCount:detectionHealth.coastTriggers},ungradedEventKeys:history.filter(x=>x.feedbackGrade===null).map(x=>x.eventKey),time:new Date().toISOString(),
     events:history.length,grades,displayTopSpeedKmh:profileAtStart?.displayTopSpeedKmh??null,
     measuredMaxSpeedKmh:analysisMaxSpeed,meanAccelerationKmhPerSec:accel.length?round(accel.reduce((s,x)=>s+x,0)/accel.length,4):null,
     medianPositiveAccelerationKmhPerSec:median(positive),maxAccelerationKmhPerSec:accel.length?accel[accel.length-1]:null,
@@ -335,7 +381,7 @@ function updateFrameTiming(now){if(lastFrameTime){const dt=now-lastFrameTime;if(
 function updateAcceleration(track,speed,dt){if(dt<4||dt>60||!Number.isFinite(speed))return;const previous=track.previousInstantSpeed;track.previousInstantSpeed=speed;if(!Number.isFinite(previous))return;const raw=(speed-previous)/dt;if(!Number.isFinite(raw)||Math.abs(raw)>ENGINE.accelerationMaxAbs){track.accelerationStable=false;universalStats.accelerationRejected++;return;}track.acceleration=track.acceleration*(1-ENGINE.accelerationSmoothing)+raw*ENGINE.accelerationSmoothing;track.accelerationSamples++;universalStats.accelerationSamples++;track.accelerationStable=Math.abs(raw-track.acceleration)<=ENGINE.accelerationStableThreshold;}
 // v3.3.5 predict(): 숫자·조건·보정식 그대로 유지.
 function predict(track){const speed=Math.max(0,track.speed);const adaptiveMs=clamp(averageFrameMs*ENGINE.frameFactor,0,ENGINE.maxAdaptiveMs);const leadMs=Math.max(0,adaptiveMs+cfg.predictionMs);const basePredictionPx=clamp(speed*leadMs,0,ENGINE.maxPredictionPx);const speedRatio=clamp((speed-ENGINE.highSpeedStart)/(ENGINE.highSpeedFull-ENGINE.highSpeedStart),0,1);const frameAdvancePx=clamp(speed*averageFrameMs*ENGINE.frameLookaheadFactor*speedRatio,0,ENGINE.maxHighSpeedAdvancePx);let accelerationPx=0,accelerationUsed=false;if(track.accelerationSamples>=ENGINE.accelerationMinSamples&&track.accelerationStable&&speedRatio>0){const extra=.5*track.acceleration*leadMs*leadMs;accelerationPx=clamp(extra*speedRatio,-ENGINE.accelerationMaxPx,ENGINE.accelerationMaxPx);accelerationUsed=Math.abs(accelerationPx)>=.02;}const highSpeedAdvancePx=frameAdvancePx;const predictionPx=clamp(basePredictionPx+highSpeedAdvancePx+accelerationPx,0,ENGINE.maxPredictionPx+ENGINE.maxHighSpeedAdvancePx+ENGINE.accelerationMaxPx);const highSpeedUsed=highSpeedAdvancePx>.01;return {speed,leadMs,basePredictionPx,frameAdvancePx,highSpeedAdvancePx,accelerationPx,accelerationUsed,highSpeedUsed,predictionPx,predictionMode:highSpeedUsed?'high-speed-lookahead':'release-2.0'};}
-function executeEvent(track,predictedY,prediction,eventKey,target,autoLead){const type=track.type;let success=false;if(type==='brakeOn'&&!brakeHeld)success=brake(true);else if(type==='brakeOff'&&brakeHeld)success=brake(false);else if(type==='boostOn'&&boostExpected==='boostOn'&&!boostHeld&&(cfg.boostZones===0||boostOnCount<cfg.boostZones)){success=boost(true);if(success)boostExpected='boostOff';}else if(type==='boostOff'&&boostExpected==='boostOff'&&boostHeld){success=boost(false);if(success)boostExpected='boostOn';}if(!success)return false;const time=nowMs(),previous=history[history.length-1];eventSequence++;const record={sequence:eventSequence,eventKey,type,event:LABELS[type],y:round(track.y,2),predictedY:round(predictedY,3),targetY:target,triggerLineY:target-cfg.tolerance,speed:round(track.speed,5),acceleration:round(track.acceleration,7),accelerationSamples:track.accelerationSamples,accelerationStable:track.accelerationStable,predictionMode:prediction.predictionMode,basePredictionPx:round(prediction.basePredictionPx,4),frameAdvancePx:round(prediction.frameAdvancePx,4),highSpeedAdvancePx:round(prediction.highSpeedAdvancePx,4),accelerationPredictionPx:round(prediction.accelerationPx,4),accelerationUsed:prediction.accelerationUsed,highSpeedUsed:prediction.highSpeedUsed,adaptiveLeadMs:round(prediction.leadMs,3),adaptivePredictionPx:round(prediction.predictionPx,4),averageFrameMs:round(averageFrameMs,3),distanceToTriggerPx:round(target-cfg.tolerance-track.y,4),estimatedFrameTravelPx:round(track.speed*averageFrameMs,4),time:Math.round(time),previousEvent:previous?.type||null,previousGapMs:previous?Math.round(time-previous.time):null,appliedCorrection:correction[eventKey]||0,autoCorrectionPx:autoLead?.px||0,autoCorrectionBasis:autoLead?.reason||'none',autoCorrectionSamples:autoLead?.samples||0,effectiveCorrectionPx:(correction[eventKey]||0)+(autoLead?.px||0),firstSeenY:round(track.firstSeenY,2),observationCount:track.observationCount,maxObservationGapMs:round(track.maxObservationGapMs||0,2),lastObservationGapMs:round(track.lastObservationGapMs||0,2),lateSpawnSuppressed:!!track.suppressed,feedbackGrade:null,feedbackDirection:null,feedbackDistanceM:null,feedback:null,feedbackTime:null};history.push(record);beginEventTrace(track,record,time);if(history.length>ENGINE.maxHistory)history.shift();if(prediction.highSpeedUsed){universalStats.highSpeedEvents++;universalStats.highSpeedPredictionUsed++;universalStats.totalAdvancePx+=prediction.highSpeedAdvancePx;universalStats.maximumAdvancePx=Math.max(universalStats.maximumAdvancePx,prediction.highSpeedAdvancePx);}else universalStats.fallbackCount++;if(prediction.accelerationUsed)universalStats.accelerationUsed++;analysisEvents.push({time:round(time,1),sequence:eventSequence,type,markerSpeedPxMs:round(track.speed,5),markerAccelerationPxMs2:round(track.acceleration,7),liveSpeedKmh:analysisLastSpeed});setMessage(LABELS[type]+' 실행');return true;}
+function executeEvent(track,predictedY,prediction,eventKey,target,autoLead,triggerMeta=null){const type=track.type;let success=false;if(type==='brakeOn'&&!brakeHeld)success=brake(true);else if(type==='brakeOff'&&brakeHeld)success=brake(false);else if(type==='boostOn'&&boostExpected==='boostOn'&&!boostHeld&&(cfg.boostZones===0||boostOnCount<cfg.boostZones)){success=boost(true);if(success)boostExpected='boostOff';}else if(type==='boostOff'&&boostExpected==='boostOff'&&boostHeld){success=boost(false);if(success)boostExpected='boostOn';}if(!success)return false;const time=nowMs(),previous=history[history.length-1];eventSequence++;const record={sequence:eventSequence,eventKey,type,event:LABELS[type],y:round(track.y,2),predictedY:round(predictedY,3),targetY:target,triggerLineY:target-cfg.tolerance,speed:round(track.speed,5),acceleration:round(track.acceleration,7),accelerationSamples:track.accelerationSamples,accelerationStable:track.accelerationStable,predictionMode:prediction.predictionMode,basePredictionPx:round(prediction.basePredictionPx,4),frameAdvancePx:round(prediction.frameAdvancePx,4),highSpeedAdvancePx:round(prediction.highSpeedAdvancePx,4),accelerationPredictionPx:round(prediction.accelerationPx,4),accelerationUsed:prediction.accelerationUsed,highSpeedUsed:prediction.highSpeedUsed,adaptiveLeadMs:round(prediction.leadMs,3),adaptivePredictionPx:round(prediction.predictionPx,4),averageFrameMs:round(averageFrameMs,3),distanceToTriggerPx:round(target-cfg.tolerance-track.y,4),estimatedFrameTravelPx:round(track.speed*averageFrameMs,4),time:Math.round(time),previousEvent:previous?.type||null,previousGapMs:previous?Math.round(time-previous.time):null,appliedCorrection:correction[eventKey]||0,autoCorrectionPx:autoLead?.px||0,autoCorrectionBasis:autoLead?.reason||'none',autoCorrectionSamples:autoLead?.samples||0,effectiveCorrectionPx:(correction[eventKey]||0)+(autoLead?.px||0),firstSeenY:round(track.firstSeenY,2),observationCount:track.observationCount,maxObservationGapMs:round(track.maxObservationGapMs||0,2),lastObservationGapMs:round(track.lastObservationGapMs||0,2),lateSpawnSuppressed:!!track.suppressed,triggerSource:triggerMeta?.source||'visible',triggerGapMs:triggerMeta?.gapMs??0,triggerEstimatedY:triggerMeta?.estimatedMarkerY??null,triggerPredictedOvershootPx:triggerMeta?.predictedOvershootPx??null,feedbackGrade:null,feedbackDirection:null,feedbackDistanceM:null,feedback:null,feedbackTime:null};history.push(record);beginEventTrace(track,record,time);if(history.length>ENGINE.maxHistory)history.shift();if(prediction.highSpeedUsed){universalStats.highSpeedEvents++;universalStats.highSpeedPredictionUsed++;universalStats.totalAdvancePx+=prediction.highSpeedAdvancePx;universalStats.maximumAdvancePx=Math.max(universalStats.maximumAdvancePx,prediction.highSpeedAdvancePx);}else universalStats.fallbackCount++;if(prediction.accelerationUsed)universalStats.accelerationUsed++;analysisEvents.push({time:round(time,1),sequence:eventSequence,type,markerSpeedPxMs:round(track.speed,5),markerAccelerationPxMs2:round(track.acceleration,7),liveSpeedKmh:analysisLastSpeed});setMessage(LABELS[type]+' 실행');return true;}
 function updateTracks(bands,now){
   const used=new Set(),sorted=[...bands].sort((a,b)=>b.y-a.y);
   for(const band of sorted){
@@ -393,11 +439,11 @@ function updateTracks(bands,now){
       if(executeEvent(best,predictedY,prediction,eventKey,target,autoLead))best.triggered=true;
     }
   }
-  for(const track of tracks)if(!used.has(track.id))track.missing++;
+  for(const track of tracks)if(!used.has(track.id)){tryShortGapCoast(track,now);track.missing++;}
   tracks=tracks.filter(track=>track.missing<=12);
   render();
 }
-function parseFeedback(text){const raw=String(text||'').trim();if(!raw)return null;if(/^진입\s+/i.test(raw)&&/\s*\/\s*탈출\s+/i.test(raw)){const m=raw.match(/^진입\s+(PERFECT|GREAT|GOOD|MISS)(?:\s*·\s*(빠름|늦음)\s*([\d.]+)\s*m)?\s*\/\s*탈출\s+(PERFECT|GREAT|GOOD|MISS)(?:\s*·\s*(빠름|늦음)\s*([\d.]+)\s*m)?(?:\s*·\s*(\d+)\s*km\/h)?/i);return {kind:'segment',raw,entry:m?.[1]?.toLowerCase()||null,exit:m?.[4]?.toLowerCase()||null,entryDirection:m?.[2]||null,entryDistanceM:m?.[3]?Number(m[3]):null,exitDirection:m?.[5]||null,exitDistanceM:m?.[6]?Number(m[6]):null,speedKmh:m?.[7]?Number(m[7]):null};}let eventType=null;if(/브레이크\s*진입/.test(raw))eventType='brakeOn';else if(/브레이크\s*해제/.test(raw))eventType='brakeOff';else if(/부스터\s*ON|BOOST\s*ON/i.test(raw))eventType='boostOn';else if(/부스터\s*OFF|BOOST\s*OFF/i.test(raw))eventType='boostOff';if(!eventType)return null;const gr=raw.match(/PERFECT|GREAT|GOOD|MISS|퍼펙트|그레이트|굿|미스/i)?.[0]?.toLowerCase(),grades={퍼펙트:'perfect',그레이트:'great',굿:'good',미스:'miss'},grade=grades[gr]||gr;if(!grade)return null;const direction=/빠름|EARLY/i.test(raw)?'early':/늦음|LATE/i.test(raw)?'late':null,dist=raw.match(/(?:빠름|늦음|EARLY|LATE)\s*([\d.]+)\s*m/i);return {kind:'event',raw,eventType,grade,direction,distanceM:dist?Number(dist[1]):null};}
+function parseFeedback(text){const raw=String(text||'').trim();if(!raw)return null;if(/^진입\s+/i.test(raw)&&/\s*\/\s*탈출\s+/i.test(raw)){const m=raw.match(/^진입\s+(PERFECT|GREAT|GOOD|BAD|MISS)(?:\s*·\s*(빠름|늦음)\s*([\d.]+)\s*m)?\s*\/\s*탈출\s+(PERFECT|GREAT|GOOD|BAD|MISS)(?:\s*·\s*(빠름|늦음)\s*([\d.]+)\s*m)?(?:\s*·\s*(\d+)\s*km\/h)?/i);return {kind:'segment',raw,entry:m?.[1]?.toLowerCase()||null,exit:m?.[4]?.toLowerCase()||null,entryDirection:m?.[2]||null,entryDistanceM:m?.[3]?Number(m[3]):null,exitDirection:m?.[5]||null,exitDistanceM:m?.[6]?Number(m[6]):null,speedKmh:m?.[7]?Number(m[7]):null};}let eventType=null;if(/브레이크\s*진입/.test(raw))eventType='brakeOn';else if(/브레이크\s*해제/.test(raw))eventType='brakeOff';else if(/부스터\s*ON|BOOST\s*ON/i.test(raw))eventType='boostOn';else if(/부스터\s*OFF|BOOST\s*OFF/i.test(raw))eventType='boostOff';if(!eventType)return null;const gr=raw.match(/PERFECT|GREAT|GOOD|BAD|MISS|퍼펙트|그레이트|굿|배드|미스/i)?.[0]?.toLowerCase(),grades={퍼펙트:'perfect',그레이트:'great',굿:'good',배드:'bad',미스:'miss'},grade=grades[gr]||gr;if(!grade)return null;const direction=/빠름|EARLY/i.test(raw)?'early':/늦음|LATE/i.test(raw)?'late':null,dist=raw.match(/(?:빠름|늦음|EARLY|LATE)\s*([\d.]+)\s*m/i);return {kind:'event',raw,eventType,grade,direction,distanceM:dist?Number(dist[1]):null};}
 function findMatchingRecord(parsed,now){const c=history.filter(r=>r.feedbackGrade===null&&r.type===parsed.eventType&&now>=r.time&&now-r.time<=ENGINE.feedbackWindowMs);return c.length===1?c[0]:null;}
 function applyLearning(record,parsed){if(!profile)return;const key=record.eventKey;if(parsed.grade==='perfect'){if(evidence[key]){delete evidence[key];saveLearning();}return;}if(parsed.grade!=='great'||!parsed.direction)return;const old=evidence[key],item=old&&old.direction===parsed.direction?old:{direction:parsed.direction,count:0,lastRun:null};if(item.lastRun===runId)return;item.count++;item.lastRun=runId;evidence[key]=item;record.learningEvidenceCount=item.count;if(item.count>=ENGINE.repeatRequired){const before=correction[key]||0,delta=parsed.direction==='late'?ENGINE.correctionStep:-ENGINE.correctionStep,after=clamp(before+delta,-ENGINE.maxCorrection,ENGINE.maxCorrection);correction[key]=after;record.correctionBefore=before;record.correctionAfter=after;item.count=0;if(after!==before)stats.adjusted++;}saveLearning();}
 function processFeedback(text){const parsed=parseFeedback(text);if(!parsed)return;const now=nowMs();lastFeedback=parsed.raw;if(parsed.kind==='segment'){segmentResults.push({time:Math.round(now),...parsed});stats.segmentResults++;if(segmentResults.length>ENGINE.maxHistory)segmentResults.shift();render();return;}const record=findMatchingRecord(parsed,now);feedbackLog.push({time:Math.round(now),...parsed,matched:Boolean(record),eventSequence:record?.sequence||null});if(feedbackLog.length>ENGINE.maxHistory)feedbackLog.shift();if(!record){stats.unmatched++;render();return;}record.feedbackGrade=parsed.grade;record.feedbackDirection=parsed.direction;record.feedbackDistanceM=parsed.distanceM;record.feedback=parsed.raw;record.feedbackTime=Math.round(now);if(Object.prototype.hasOwnProperty.call(stats,parsed.grade))stats[parsed.grade]++;applyLearning(record,parsed);observeFeedback(record,parsed);render();}
@@ -457,7 +503,7 @@ function currentExport(){return {version:VERSION,releaseBase:RELEASE,courseId,co
 $('#copy-btn').onclick=async()=>setMessage(await copyText(JSON.stringify(currentExport(),null,2))?'입력 기록 복사 완료':'복사 실패');
 $('#analysis-copy').onclick=async()=>setMessage(await copyText(JSON.stringify(readSavedRuns(),null,2))?'누적 분석 기록 복사 완료':'복사 실패');
 $('#analysis-download').onclick=()=>{const blob=new Blob([JSON.stringify(readSavedRuns(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='dopamine-v337-analysis.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);setMessage(readSavedRuns().length?'누적 분석 파일 저장 요청':'저장된 분석 기록이 없습니다. 주행 후 다시 시도하세요');};
-function render(){const cs=$('#chain-status');if(cs)cs.textContent='연속: '+(chainEnabled?'작동':'꺼짐')+' / '+chainState+' / 이번 실행 '+chainRuns+'판'+(chainCounts?'\n타이어 잔여 H:'+chainCounts.hard+' M:'+chainCounts.medium+' S:'+chainCounts.soft:'');const c=$('#course-name'),s=$('#status'),v=$('#vehicle-info');if(c)c.textContent=courseName+' ('+courseId+')\n프로필: '+(profile||'자동 관찰학습 (차량별)');if(v)v.textContent='인식: '+profileStatus+'\n차량: '+(detected.name||'미확인')+'\n등급: '+(detected.grade||'미확인')+' / 별: '+(detected.stars??'미확인')+'\n타이어: '+(detected.tire||'미확인')+'\n표시 최고속력: '+(detected.displayTopSpeedKmh??'미확인')+' km/h\n누적 주행: '+savedRunCount+'회';if(s)s.textContent=lastMessage+'\nBOOST ON: '+boostOnCount+' / OFF: '+boostOffCount+'\n다음: '+boostExpected+'\n마지막 감지: '+lastDetected+'\n판정: '+lastFeedback+'\nPERFECT: '+stats.perfect+' / GREAT: '+stats.great+'\n고속 보정 입력: '+universalStats.highSpeedEvents+'\n가속도 보정 입력: '+universalStats.accelerationUsed+'\n프레임: '+round(averageFrameMs,1)+'ms\n학습 보정: '+stats.adjusted+'회\n실측 최고속도: '+(analysisMaxSpeed===null?'미확인':analysisMaxSpeed+' km/h');const simpleState=$('#simple-state'),simpleTires=$('#simple-tires');if(simpleState)simpleState.textContent=stopAfterCurrent?'⏳ 완주 후 중지 예약':running?'🟢 주행 중':chainEnabled?'🔁 연속 주행':'대기 중';$('#stop-btn').textContent=stopAfterCurrent?'⏳ 완주 후 중지 예약':'■ 현재 판 후 중지';if(simpleTires)simpleTires.textContent=chainCounts?'H '+chainCounts.hard+' · M '+chainCounts.medium+' · S '+chainCounts.soft:'확인 전';mini.textContent=expanded?'✕ AUTO':running?'🟢 AUTO':'🚗 AUTO';}
+function render(){const cs=$('#chain-status');if(cs)cs.textContent='연속: '+(chainEnabled?'작동':'꺼짐')+' / '+chainState+' / 이번 실행 '+chainRuns+'판'+(chainCounts?'\n타이어 잔여 H:'+chainCounts.hard+' M:'+chainCounts.medium+' S:'+chainCounts.soft:'');const c=$('#course-name'),s=$('#status'),v=$('#vehicle-info');if(c)c.textContent=courseName+' ('+courseId+')\n프로필: '+(profile||'자동 관찰학습 (차량별)');if(v)v.textContent='인식: '+profileStatus+'\n차량: '+(detected.name||'미확인')+'\n등급: '+(detected.grade||'미확인')+' / 별: '+(detected.stars??'미확인')+'\n타이어: '+(detected.tire||'미확인')+'\n표시 최고속력: '+(detected.displayTopSpeedKmh??'미확인')+' km/h\n누적 주행: '+savedRunCount+'회';if(s)s.textContent=lastMessage+'\nBOOST ON: '+boostOnCount+' / OFF: '+boostOffCount+'\n다음: '+boostExpected+'\n마지막 감지: '+lastDetected+'\n판정: '+lastFeedback+'\nPERFECT: '+stats.perfect+' / GREAT: '+stats.great+' / GOOD: '+stats.good+' / BAD: '+stats.bad+' / MISS: '+stats.miss+'\n고속 보정 입력: '+universalStats.highSpeedEvents+'\n가속도 보정 입력: '+universalStats.accelerationUsed+'\n프레임: '+round(averageFrameMs,1)+'ms\n학습 보정: '+stats.adjusted+'회\n실측 최고속도: '+(analysisMaxSpeed===null?'미확인':analysisMaxSpeed+' km/h');const simpleState=$('#simple-state'),simpleTires=$('#simple-tires');if(simpleState)simpleState.textContent=stopAfterCurrent?'⏳ 완주 후 중지 예약':running?'🟢 주행 중':chainEnabled?'🔁 연속 주행':'대기 중';$('#stop-btn').textContent=stopAfterCurrent?'⏳ 완주 후 중지 예약':'■ 현재 판 후 중지';if(simpleTires)simpleTires.textContent=chainCounts?'H '+chainCounts.hard+' · M '+chainCounts.medium+' · S '+chainCounts.soft:'확인 전';mini.textContent=expanded?'✕ AUTO':running?'🟢 AUTO':'🚗 AUTO';}
 function setMessage(m){lastMessage=m;render();}
 function onResize(){placeUI();}function onPageHide(){if(chainEnabled)stopChain('페이지 이동으로 중지');else stop(false);}function destroy(){if(destroyed)return;destroyed=true;clearInterval(lobbyInfoTimer);if(chainEnabled)stopChain('스크립트 교체로 중지');else stop(false);window.removeEventListener('resize',onResize);window.removeEventListener('pagehide',onPageHide);ui.remove();if(window[INSTANCE]?.destroy===destroy)delete window[INSTANCE];}
 const lobbyInfoTimer=setInterval(refreshLobbyInfo,1500);
