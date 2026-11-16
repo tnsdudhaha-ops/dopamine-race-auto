@@ -1,6 +1,6 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-16T07:00:58.127Z",
+  "generatedAt": "2026-11-16T22:14:53.475Z",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0",
   "participants": [
@@ -178,9 +178,9 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-15T21:30:46.066Z",
-      "modelCount": 12,
-      "vehicleCount": 12,
+      "updatedAt": "2026-11-16T22:14:48.672Z",
+      "modelCount": 11,
+      "vehicleCount": 11,
       "vehicles": [
         {
           "grade": "SSR",
@@ -240,13 +240,6 @@
         },
         {
           "grade": "S",
-          "model": "현대 쏘나타",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "S",
           "model": "현대 아이오닉 5",
           "maxStars": 1,
           "quantity": 1,
@@ -270,9 +263,9 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-15T06:07:05.569Z",
-      "modelCount": 9,
-      "vehicleCount": 9,
+      "updatedAt": "2026-11-16T22:14:50.286Z",
+      "modelCount": 10,
+      "vehicleCount": 10,
       "vehicles": [
         {
           "grade": "SR",
@@ -333,7 +326,14 @@
         {
           "grade": "R",
           "model": "대우 티코",
-          "maxStars": 2,
+          "maxStars": 3,
+          "quantity": 1,
+          "starBreakdown": []
+        },
+        {
+          "grade": "R",
+          "model": "현대 포터",
+          "maxStars": 1,
           "quantity": 1,
           "starBreakdown": []
         }
@@ -398,9 +398,9 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-16T05:11:58.337Z",
+      "updatedAt": "2026-11-16T22:14:53.113Z",
       "modelCount": 10,
-      "vehicleCount": 12,
+      "vehicleCount": 13,
       "vehicles": [
         {
           "grade": "SR",
@@ -427,8 +427,13 @@
           "grade": "S",
           "model": "현대 싼타페",
           "maxStars": 2,
-          "quantity": 1,
-          "starBreakdown": []
+          "quantity": 2,
+          "starBreakdown": [
+            {
+              "stars": 2,
+              "qty": 2
+            }
+          ]
         },
         {
           "grade": "S",
@@ -463,7 +468,7 @@
         {
           "grade": "R",
           "model": "쉐보레 스파크",
-          "maxStars": 4,
+          "maxStars": 5,
           "quantity": 1,
           "starBreakdown": []
         },
