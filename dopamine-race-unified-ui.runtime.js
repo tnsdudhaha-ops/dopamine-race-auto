@@ -21,7 +21,7 @@ box.innerHTML='<style>'+
 '<div class="panel"><div class="head"><strong>🏎️ 도파민 레이스 <small style="color:#b3c8db">GitHub 자동 동기화</small></strong><div><button id="du-tools">⚙</button> <button id="du-min">−</button></div></div>'+
 '<div class="grid"><button class="primary" id="du-auto">▶ AUTO 주행</button><button class="primary" id="du-garage">🚗 차고 갱신</button></div>'+
 '<div class="status" id="du-status">초기화 중…</div><div class="status" id="du-cloud-state">☁ Google Sheets 확인 중…</div>'+
-'<div class="section" id="du-race" hidden><div class="grid"><button id="du-one">▶ 1판 시작</button><button id="du-chain">🔁 타이어 모두</button><button id="du-stop" style="background:#a5313e">■ 이번 판 후 중지</button><button id="du-analyze">📊 주행 분석</button></div><div class="status" id="du-race-status"></div></div>'+
+'<div class="section" id="du-race" hidden><label>연속 실행 판수 · 시작 전 설정 (0 = 화면의 잔여 타이어 모두)<input id="du-run-limit" type="number" min="0" max="18" step="1" value="0" inputmode="numeric"></label><div class="grid"><button id="du-one">▶ 1판 시작</button><button id="du-chain">🔁 지정 판수 연속</button><button id="du-stop" style="background:#a5313e">■ 다음 판 전 중지</button><button id="du-analyze">📊 주행 분석</button></div><div class="status" id="du-race-status"></div></div>'+
 '<div class="section" id="du-advanced" hidden><div class="grid"><button id="du-log">📋 입력 기록 복사</button><button id="du-copy-analysis">📋 누적 분석 복사</button><button id="du-json">💾 누적 JSON 저장</button><button id="du-detect">🔍 차량 다시 읽기</button><button id="du-defaults">↩ 설정 초기화</button><button id="du-export">📥 차고 백업</button><button id="du-trades">🧾 거래 기록 수집</button><button id="du-force">⛔ 긴급 즉시 중지</button><button id="du-cloud-config">☁ 시트 연결 설정</button><button id="du-cloud-retry">☁ 미전송 기록 전송</button></div><div class="settings" id="du-settings"></div><button style="width:100%;margin-top:6px" id="du-save">⚙ AUTO 설정 저장</button></div>'+
 '<div class="section" id="du-report" hidden><div class="report" id="du-report-body"></div><button style="width:100%;margin-top:6px" id="du-report-close">분석 닫기</button></div></div>'+
 '<button class="mini" id="du-expand">🏎️ 도파민 레이스</button>';
@@ -108,9 +108,15 @@ const tm=a.lastRaceTiming;const lap=tm?.recordedLapTimeSec;const lastTime=tm?.co
 q('#du-auto').textContent=active?'🟢 AUTO 작동 중':'▶ AUTO 주행';
 q('#du-garage').textContent=busy?'🚗 갱신 중…':'🚗 차고 갱신';
 q('#du-garage').disabled=active||busy;
-q('#du-one').disabled=active||busy;q('#du-chain').disabled=active||busy;q('#du-stop').disabled=!active||!!a.stopAfterCurrent;q('#du-stop').textContent=a.stopAfterCurrent?'⏳ 완주 후 중지 예약':'■ 이번 판 후 중지';
+q('#du-one').disabled=active||busy;q('#du-chain').disabled=active||busy;
+q('#du-run-limit').disabled=active||busy;
+q('#du-stop').disabled=!active||!!a.running||!!a.stopAfterCurrent;
+q('#du-stop').textContent=a.running?'⚠ 주행 중 터치 금지':a.stopAfterCurrent?'⏳ 완주 후 중지 예약':'■ 다음 판 시작 전 중지';
+q('#du-analyze').disabled=!!a.running;
+q('#du-auto').disabled=!!a.running;
+q('#du-min').disabled=!!a.running;
 q('#du-race').hidden=view!=='race';q('#du-advanced').hidden=view!=='tools';q('#du-report').hidden=view!=='report';
-q('#du-race-status').textContent='AUTO v'+(a.version||'확인 중')+'\n코스: '+(a.courseName||'미확인')+'\n연속: '+(a.chainEnabled?a.chainState+' / '+a.chainRuns+'판':'대기')+'\nPERFECT '+(a.stats?.perfect||0)+' / GREAT '+(a.stats?.great||0)+' / GOOD '+(a.stats?.good||0)+' / BAD '+(a.stats?.bad||0)+' / MISS '+(a.stats?.miss||0)+'\n관찰학습: '+(a.learningProfileKey?'차량별 기록 중':'차량 인식 대기')+'\n현재 게임 랩시계: '+(Number.isFinite(a.currentGameHudSec)?a.currentGameHudSec.toFixed(3)+'초':'미검출')+'\n지난 완주: '+lastTime;
+q('#du-race-status').textContent='AUTO v'+(a.version||'확인 중')+'\n코스: '+(a.courseName||'미확인')+'\n연속: '+(a.chainEnabled?a.chainState+' / '+a.chainRuns+'판 · 예약 '+(a.chainMaxRuns?a.chainMaxRuns+'판':'타이어 모두'):'대기')+'\nPERFECT '+(a.stats?.perfect||0)+' / GREAT '+(a.stats?.great||0)+' / GOOD '+(a.stats?.good||0)+' / BAD '+(a.stats?.bad||0)+' / MISS '+(a.stats?.miss||0)+'\n관찰학습: '+(a.learningProfileKey?'차량별 기록 중':'차량 인식 대기')+'\n'+(a.running?'⚠ 주행 중에는 화면 버튼 터치 금지 · 중지는 출발 전 횟수 예약':'시작 전에 연속 판수를 정하면 완주 후 자동 중지')+'\n현재 게임 랩시계: '+(Number.isFinite(a.currentGameHudSec)?a.currentGameHudSec.toFixed(3)+'초':'미검출')+'\n지난 완주: '+lastTime;
 q('#du-status').textContent='GitHub 자동 로드 · AUTO v'+(a.version||'확인 중')+'\n'+(notice?notice+'\n':'')+(active?'AUTO 주행 중':'AUTO 대기')+(a.chainCounts?'\n타이어 H'+a.chainCounts.hard+' M'+a.chainCounts.medium+' S'+a.chainCounts.soft:'')+'\n'+(f.message||'차고 분석 대기');
 q('#du-cloud-state').textContent='☁ Google Sheets · '+cloudUploader.state().message;
 relocate();
@@ -118,8 +124,20 @@ relocate();
 q('#du-auto').onclick=()=>toggle('race');
 q('#du-tools').onclick=()=>toggle('tools');
 q('#du-one').onclick=()=>{if(getF().busy)return say('차고 갱신 중에는 주행할 수 없습니다.');press('start-btn');notice='';render();};
-q('#du-chain').onclick=()=>{if(getF().busy)return say('차고 갱신 중에는 주행할 수 없습니다.');press('chain-btn');notice='';render();};
-q('#du-stop').onclick=()=>{const wasRunning=!!getA().running;press('stop-btn');say(wasRunning?'현재 판 완주 후 중지 예약':'AUTO 중지 요청 완료');};
+q('#du-chain').onclick=()=>{
+ if(getF().busy||getA().running||getA().chainEnabled)return say('주행 중에는 새 연속 주행을 시작할 수 없습니다.');
+ const v=Number(q('#du-run-limit').value),field=autoUi()?.querySelector('#chain-run-limit');
+ if(!Number.isInteger(v)||v<0||v>18)return say('예약 판수는 0~18 사이 정수만 입력하세요.');
+ if(!field)return say('AUTO 예약 판수 설정 기능을 찾을 수 없습니다. 새로고침 후 다시 시도하세요.');
+ field.value=String(v);
+ if(!press('chain-btn'))return say('AUTO 연속 주행 시작 버튼 연결 실패');
+ notice='';render();
+};
+q('#du-stop').onclick=()=>{
+ if(getA().running)return say('주행 중 화면 터치가 게임을 중단할 위험이 있습니다. 출발 전 실행 판수를 예약하세요.');
+ if(!press('stop-btn'))return say('AUTO 중지 버튼 연결 실패');
+ say('다음 주행 시작 전 AUTO 중지 요청 완료');
+};
 q('#du-garage').onclick=async()=>{if(getA().running||getA().chainEnabled)return say('주행 중 차고 갱신 불가');const fleet=window.__duFleet;if(!fleet)return say('차고 분석기 실행 오류');notice='';render();try{await fleet.refresh();}catch(e){say('갱신 오류: '+String(e?.message||e));}render();};
 q('#du-analyze').onclick=()=>toggle('report');q('#du-report-close').onclick=()=>toggle('race');
 q('#du-log').onclick=()=>{press('copy-btn');say('입력 기록 복사 실행');};
