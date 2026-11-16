@@ -578,6 +578,7 @@
     shadow.getElementById('fleet').onclick=refreshAllGarages;
   }
   function relocateOverlay() {
+    if(window.__duMode){root.style.setProperty('display','none','important');return;}
     // Ordinary CSS modals are not in the browser top layer: mount on body.
     // Only native showModal() dialogs require the toolbar inside the dialog.
     const nativeDialogs=[...document.querySelectorAll('dialog[open]')]
@@ -592,6 +593,7 @@
     root.style.setProperty('opacity','1','important');
     root.style.setProperty('display','block','important');
   }
+  if(window.__duMode)window.__duFleet={refresh:refreshAllGarages,exportJson,captureTrades,state:()=>({busy:fleetRefreshing||collecting,message,users:Object.keys(db.garages||{}).length,version:VERSION})};
   function init() {
     document.body.appendChild(root);
     relocateOverlay();
@@ -602,6 +604,7 @@
     root.style.setProperty('z-index','2147483647','important');
     root.style.setProperty('display','block','important');
     render();
+    if(window.__duMode)root.style.setProperty('display','none','important');
     setInterval(relocateOverlay,1200);
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',init,{once:true});
