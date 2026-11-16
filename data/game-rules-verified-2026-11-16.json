@@ -189,19 +189,18 @@
         "derivedInputCountStatus": "inferred by same rule; not a measured run count in screenshot"
       }
     },
-    "boostFinishPenalty": {
-      "scope": "BOOST 종료 판정선 이후 BAD/MISS. 공지 원문은 마지막 결승선 구간만으로 한정하지 않음; 중간 구간 적용 여부 실주행 검증 필요",
-      "beforeFinish": {
-        "bad": 0,
-        "miss": 0
-      },
-      "afterFinish": {
-        "badSec": 0.5,
-        "missSec": 1
-      },
-      "uncertainty": "cumulative interaction with older +1s corner miss penalty unverified",
-      "penaltyName": "휠락 (wheel-lock)",
-      "wheelLockConditions": {
+    "sourceImages": [
+      10,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "boostEndWheelLockPenalty": {
+      "penaltyName": "휠락",
+      "scope": "BOOST 종료 판정 라인. 게임 공지 원문은 결승선 직전만으로 제한하지 않음. 중간 부스터 적용 여부 실게임 검증 대상.",
+      "conditions": {
         "afterBoostEndJudgmentLine": {
           "BAD": {
             "addedSeconds": 0.5
@@ -220,16 +219,15 @@
         },
         "beforeLineBoostRelease": "부스터 가속이 일찍 종료됨. BAD/MISS도 휠락 없음"
       },
-      "verificationStatus": "2026-11-15 official screenshot #12 wording rechecked 2026-11-16"
-    },
-    "sourceImages": [
-      10,
-      12,
-      13,
-      14,
-      15,
-      16
-    ]
+      "secondsAfterLineBAD": 0.5,
+      "secondsAfterLineMISS": 1,
+      "noticeDate": "2026-11-15",
+      "sourceImage": 12,
+      "unknowns": [
+        "mid-course BOOST OFF 판정 누락이 휠락인지",
+        "게임 결과화면에 휠락 항목이 어떤 식으로 표시되는지"
+      ]
+    }
   },
   "shop": {
     "randomDraw": {
