@@ -190,7 +190,7 @@
       }
     },
     "boostFinishPenalty": {
-      "scope": "after boost end judgment line near finish",
+      "scope": "BOOST 종료 판정선 이후 BAD/MISS. 공지 원문은 마지막 결승선 구간만으로 한정하지 않음; 중간 구간 적용 여부 실주행 검증 필요",
       "beforeFinish": {
         "bad": 0,
         "miss": 0
@@ -199,7 +199,28 @@
         "badSec": 0.5,
         "missSec": 1
       },
-      "uncertainty": "cumulative interaction with older +1s corner miss penalty unverified"
+      "uncertainty": "cumulative interaction with older +1s corner miss penalty unverified",
+      "penaltyName": "휠락 (wheel-lock)",
+      "wheelLockConditions": {
+        "afterBoostEndJudgmentLine": {
+          "BAD": {
+            "addedSeconds": 0.5
+          },
+          "MISS": {
+            "addedSeconds": 1
+          }
+        },
+        "beforeBoostEndJudgmentLine": {
+          "BAD": {
+            "addedSeconds": 0
+          },
+          "MISS": {
+            "addedSeconds": 0
+          }
+        },
+        "beforeLineBoostRelease": "부스터 가속이 일찍 종료됨. BAD/MISS도 휠락 없음"
+      },
+      "verificationStatus": "2026-11-15 official screenshot #12 wording rechecked 2026-11-16"
     },
     "sourceImages": [
       10,
@@ -514,6 +535,7 @@
     "Whether the user can select the model in the every-20-draw SSR star1 chest.",
     "Whether vehicle-for-vehicle direct swaps exist outside the shown market UI.",
     "Exact condition for combined old corner MISS +1 sec and new end-of-boost +0.5/1 sec penalties.",
-    "Real-time updates after 2026-11-16 snapshot."
+    "Real-time updates after 2026-11-16 snapshot.",
+    "Which specific mid-course BOOST end segments trigger wheel-lock and how it appears in result/feedback DOM; 3 v3.3.25 completed runs missing event grade must not be assumed wheel-lock."
   ]
 }
