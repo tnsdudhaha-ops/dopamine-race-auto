@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.24
-// @description  Release 3.0 / 기존 예측식 동결 / BAD 파싱·짧은 표식 관측 공백 보완 / 제한적 자동 보정
+// @version      3.3.25
+// @description  Release 3.0 / 예측식 동결 / BAD 기록·안전한 공백 추정·BOOST OFF 희소 관측 보완 / 조건부 학습
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
@@ -13,7 +13,7 @@
 'use strict';
 // Avoid duplicate driving engines when the stable unified GitHub loader is active.
 if(window.__duMode&&!window.__duUnifiedLoadingAuto)return;
-const VERSION='3.3.24', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.25', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -22,6 +22,65 @@ const ENGINE={frameFactor:.35,maxAdaptiveMs:8,maxPredictionPx:5,maxFrameMs:80,ma
 const DETECTION_GUARD={lateSpawnSlackPx:8,trackGapMs:80,rafGapMs:80,maxAlerts:80};
 // Guarded missing-scan prediction, separate from the frozen Release 3.0 predict().
 const COAST_GUARD={minObservations:8,minSpeed:.04,maxSpeed:.36,minTrace:4,maxRecentGapMs:55,maxPriorGapMs:50,maxAgeMs:70,nearTriggerPx:20,maxPredictedOvershootPx:4.5,maxSpeedSpread:.07,maxTrackSpeedDiscrepancy:.065};
+
+const SPARSE_BOOST_GUARD={
+  minObservations:4,minTrace:4,minSpeed:.12,maxSpeed:.32,
+  minLongGapMs:58,maxRecentGapMs:180,maxSpeedSpread:.027,
+  maxTrackSpeedDiscrepancy:.033,maxAgeMs:125,maxMissingFrames:7,
+  nearTriggerPx:22,anticipationPx:1.5,maxPredictedOvershootPx:2.5
+};
+// Sparse BOOST OFF tracks can move past the input line between valid scans.
+// Use strictly consistent velocity samples and a bounded time horizon, not a global lead.
+function evaluateSparseBoostCoast(track,now){
+  if(track.type!=='boostOff'||track.triggered||track.suppressed
+    ||track.observationCount<SPARSE_BOOST_GUARD.minObservations
+    ||track.missing>SPARSE_BOOST_GUARD.maxMissingFrames)return null;
+  const age=now-track.lastTime;
+  if(!(age>0&&age<=SPARSE_BOOST_GUARD.maxAgeMs)
+    ||!(track.speed>=SPARSE_BOOST_GUARD.minSpeed&&track.speed<=SPARSE_BOOST_GUARD.maxSpeed))return null;
+  const frames=track.traceWindow?.slice(-SPARSE_BOOST_GUARD.minTrace)||[];
+  if(frames.length!==SPARSE_BOOST_GUARD.minTrace)return null;
+  const speeds=[];let sparseGaps=0;
+  for(let i=1;i<frames.length;i++){
+    const dt=frames[i].t-frames[i-1].t,dy=frames[i].y-frames[i-1].y;
+    if(!(dt>0&&dt<=SPARSE_BOOST_GUARD.maxRecentGapMs&&dy>0))return null;
+    if(dt>=SPARSE_BOOST_GUARD.minLongGapMs)sparseGaps++;
+    speeds.push(dy/dt);
+  }
+  if(!sparseGaps||Math.max(...speeds)-Math.min(...speeds)>SPARSE_BOOST_GUARD.maxSpeedSpread)return null;
+  const ordered=[...speeds].sort((a,b)=>a-b),median=ordered[1];
+  if(Math.abs(track.speed-median)>SPARSE_BOOST_GUARD.maxTrackSpeedDiscrepancy)return null;
+  const target=cfg.boostY,triggerLine=target-cfg.tolerance;
+  if(track.y>=triggerLine||triggerLine-track.y>SPARSE_BOOST_GUARD.nearTriggerPx)return null;
+  const eventKey='boostOff:'+(eventSequence+1),prediction=predict(track);
+  const autoLead=autoLeadPreview(eventKey,track.speed);
+  const estimatedY=track.y+track.speed*age;
+  const predictedY=estimatedY+prediction.predictionPx+cfg.boostOffset
+    +(correction[eventKey]||0)+autoLead.px;
+  const overshoot=predictedY-triggerLine;
+  if(overshoot< -SPARSE_BOOST_GUARD.anticipationPx
+    ||overshoot>SPARSE_BOOST_GUARD.maxPredictedOvershootPx)return null;
+  return {eventKey,prediction,autoLead,target,predictedY,meta:{
+    source:'sparse-boost-coast',gapMs:round(age,2),
+    estimatedMarkerY:round(estimatedY,2),
+    observedMarkerY:round(track.y,2),
+    medianRecentSpeed:round(median,5),
+    sparseObservationGaps:sparseGaps,
+    anticipationPx:SPARSE_BOOST_GUARD.anticipationPx,
+    predictedOvershootPx:round(overshoot,3)
+  }};
+}
+function trySparseBoostCoast(track,now){
+  const candidate=evaluateSparseBoostCoast(track,now);
+  if(!candidate)return false;
+  const success=executeEvent(track,candidate.predictedY,candidate.prediction,
+    candidate.eventKey,candidate.target,candidate.autoLead,candidate.meta);
+  if(!success)return false;
+  track.triggered=true;
+  detectionHealth.sparseBoostTriggers++;
+  recordDetectionAlert('sparse-boost-coast-trigger',track,now,{eventKey:candidate.eventKey,...candidate.meta});
+  return true;
+}
 const AUTO_TUNE={minSamples:8,minRuns:6,minDirectional:5,directionalFraction:.55,maxPx:.5};
 const SETTINGS_PREFIX='dopamine-auto-v32:',POSITION_KEY='dopamine-auto:position-v328',LEARNING_PREFIX='dopamine-auto-v335:learning:',PROFILE_KEY='dopamine-auto-v335:profile';
 const ANALYSIS_KEY='dopamine-auto-v336:runs', MAX_RUNS=120, MAX_SAMPLES=4000;
@@ -29,7 +88,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), round=(v,n=3)=>Number((Number(v)
 let raceStartedAtMs=null,raceFinishedAtMs=null;
 let cfg={...DEFAULTS},courseId='default',courseName='기본 코스',courseScope='default',profile='',running=false,started=false,armed=false,destroyed=false,brakeHeld=false,boostHeld=false,boostExpected='boostOn',boostOnCount=0,boostOffCount=0,eventSequence=0,nextTrackId=1,tracks=[],lastFrameTime=0,averageFrameMs=16.67,raf=null,startTimer=null,feedbackObserver=null,feedbackElement=null,lastFeedbackText='',feedbackEmpty=true,lastMessage='대기 중',lastDetected='-',lastFeedback='-',runId='',profileAtStart=null,analysisLastTime=0,analysisLastSpeed=null,analysisLastSpeedTime=0,analysisMaxSpeed=null,analysisSamples=[],analysisAccel=[],analysisEvents=[],profileStatus='미확인';
 const history=[],feedbackLog=[],segmentResults=[],correction={},evidence={},detectionAlerts=[];
-const detectionHealth={lateSpawns:0,trackLongGaps:0,rafLongGaps:0,maxTrackGapMs:0,maxRafGapMs:0,coastTriggers:0};
+const detectionHealth={lateSpawns:0,trackLongGaps:0,rafLongGaps:0,maxTrackGapMs:0,maxRafGapMs:0,coastTriggers:0,sparseBoostTriggers:0};
 const stats={perfect:0,great:0,good:0,bad:0,miss:0,unmatched:0,adjusted:0,segmentResults:0};
 const universalStats={highSpeedEvents:0,highSpeedPredictionUsed:0,accelerationUsed:0,accelerationRejected:0,accelerationSamples:0,fallbackCount:0,maximumSpeed:0,maximumAdvancePx:0,totalAdvancePx:0};
 function game(){try{return document.querySelector('iframe[title="타임어택"]')?.contentDocument||null;}catch(_){return null;}}
@@ -84,7 +143,7 @@ function observeFeedback(record,parsed){
   // Only high-quality, uniquely matched events count toward automatic timing correction.
   // The observation-only counters above retain all matched feedback for diagnostics.
   const quality=record.observationCount>=3&&record.firstSeenY<record.triggerLineY-DETECTION_GUARD.lateSpawnSlackPx
-    &&record.maxObservationGapMs<=DETECTION_GUARD.trackGapMs&&!record.lateSpawnSuppressed&&record.triggerSource!=='short-gap-coast';
+    &&record.maxObservationGapMs<=DETECTION_GUARD.trackGapMs&&!record.lateSpawnSuppressed&&record.triggerSource==='visible';
   if(quality){
     const recent=Array.isArray(entry.qualityRecent)?entry.qualityRecent:[];
     if(!recent.some(v=>v.runId===runId)){
@@ -365,7 +424,7 @@ function saveRun(reason){
   const median=a=>a.length?a[Math.floor(a.length/2)]:null;
   const result={runId,version:VERSION,courseId,courseName,courseScope,vehicle:profileAtStart,vehicleKey:vehicleKey(profileAtStart),manualProfile:profile||null,
     observationLearning:{mode:'confidence-gated',profileKey:observeState?.identity||null,runFeedback:observeRunCount,runGreat:observeRunGreat,totalProfileFeedback:observeState?.totalFeedback||0,autoCorrectionAppliedEvents:history.filter(x=>x.autoCorrectionPx!==0).length,minSamples:AUTO_TUNE.minSamples},traceCapture:{beforeFrames:TRACE_PRE,afterFrames:TRACE_POST,windowMs:TRACE_WINDOW_MS},
-    reason,complete,observedRaceDurationMs,observedRaceDurationSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),raceDurationSource:observedRaceDurationMs===null?null:'client-start-light-to-first-finish-phase',completionEvidence:{allEvents,allSegments,phase:root()?.dataset.phase||null},detectionHealth:{...detectionHealth},detectionAlerts:detectionAlerts.slice(),shortGapCoast:{enabled:true,guard:{...COAST_GUARD},triggeredCount:detectionHealth.coastTriggers},ungradedEventKeys:history.filter(x=>x.feedbackGrade===null).map(x=>x.eventKey),time:new Date().toISOString(),
+    reason,complete,observedRaceDurationMs,observedRaceDurationSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),raceDurationSource:observedRaceDurationMs===null?null:'client-start-light-to-first-finish-phase',completionEvidence:{allEvents,allSegments,phase:root()?.dataset.phase||null},detectionHealth:{...detectionHealth},detectionAlerts:detectionAlerts.slice(),shortGapCoast:{enabled:true,guard:{...COAST_GUARD},triggeredCount:detectionHealth.coastTriggers},sparseBoostCoast:{enabled:true,guard:{...SPARSE_BOOST_GUARD},triggeredCount:detectionHealth.sparseBoostTriggers},ungradedEventKeys:history.filter(x=>x.feedbackGrade===null).map(x=>x.eventKey),time:new Date().toISOString(),
     events:history.length,grades,displayTopSpeedKmh:profileAtStart?.displayTopSpeedKmh??null,
     measuredMaxSpeedKmh:analysisMaxSpeed,meanAccelerationKmhPerSec:accel.length?round(accel.reduce((s,x)=>s+x,0)/accel.length,4):null,
     medianPositiveAccelerationKmhPerSec:median(positive),maxAccelerationKmhPerSec:accel.length?accel[accel.length-1]:null,
@@ -383,7 +442,7 @@ function updateFrameTiming(now){if(lastFrameTime){const dt=now-lastFrameTime;if(
 function updateAcceleration(track,speed,dt){if(dt<4||dt>60||!Number.isFinite(speed))return;const previous=track.previousInstantSpeed;track.previousInstantSpeed=speed;if(!Number.isFinite(previous))return;const raw=(speed-previous)/dt;if(!Number.isFinite(raw)||Math.abs(raw)>ENGINE.accelerationMaxAbs){track.accelerationStable=false;universalStats.accelerationRejected++;return;}track.acceleration=track.acceleration*(1-ENGINE.accelerationSmoothing)+raw*ENGINE.accelerationSmoothing;track.accelerationSamples++;universalStats.accelerationSamples++;track.accelerationStable=Math.abs(raw-track.acceleration)<=ENGINE.accelerationStableThreshold;}
 // v3.3.5 predict(): 숫자·조건·보정식 그대로 유지.
 function predict(track){const speed=Math.max(0,track.speed);const adaptiveMs=clamp(averageFrameMs*ENGINE.frameFactor,0,ENGINE.maxAdaptiveMs);const leadMs=Math.max(0,adaptiveMs+cfg.predictionMs);const basePredictionPx=clamp(speed*leadMs,0,ENGINE.maxPredictionPx);const speedRatio=clamp((speed-ENGINE.highSpeedStart)/(ENGINE.highSpeedFull-ENGINE.highSpeedStart),0,1);const frameAdvancePx=clamp(speed*averageFrameMs*ENGINE.frameLookaheadFactor*speedRatio,0,ENGINE.maxHighSpeedAdvancePx);let accelerationPx=0,accelerationUsed=false;if(track.accelerationSamples>=ENGINE.accelerationMinSamples&&track.accelerationStable&&speedRatio>0){const extra=.5*track.acceleration*leadMs*leadMs;accelerationPx=clamp(extra*speedRatio,-ENGINE.accelerationMaxPx,ENGINE.accelerationMaxPx);accelerationUsed=Math.abs(accelerationPx)>=.02;}const highSpeedAdvancePx=frameAdvancePx;const predictionPx=clamp(basePredictionPx+highSpeedAdvancePx+accelerationPx,0,ENGINE.maxPredictionPx+ENGINE.maxHighSpeedAdvancePx+ENGINE.accelerationMaxPx);const highSpeedUsed=highSpeedAdvancePx>.01;return {speed,leadMs,basePredictionPx,frameAdvancePx,highSpeedAdvancePx,accelerationPx,accelerationUsed,highSpeedUsed,predictionPx,predictionMode:highSpeedUsed?'high-speed-lookahead':'release-2.0'};}
-function executeEvent(track,predictedY,prediction,eventKey,target,autoLead,triggerMeta=null){const type=track.type;let success=false;if(type==='brakeOn'&&!brakeHeld)success=brake(true);else if(type==='brakeOff'&&brakeHeld)success=brake(false);else if(type==='boostOn'&&boostExpected==='boostOn'&&!boostHeld&&(cfg.boostZones===0||boostOnCount<cfg.boostZones)){success=boost(true);if(success)boostExpected='boostOff';}else if(type==='boostOff'&&boostExpected==='boostOff'&&boostHeld){success=boost(false);if(success)boostExpected='boostOn';}if(!success)return false;const time=nowMs(),previous=history[history.length-1];eventSequence++;const record={sequence:eventSequence,eventKey,type,event:LABELS[type],y:round(track.y,2),predictedY:round(predictedY,3),targetY:target,triggerLineY:target-cfg.tolerance,speed:round(track.speed,5),acceleration:round(track.acceleration,7),accelerationSamples:track.accelerationSamples,accelerationStable:track.accelerationStable,predictionMode:prediction.predictionMode,basePredictionPx:round(prediction.basePredictionPx,4),frameAdvancePx:round(prediction.frameAdvancePx,4),highSpeedAdvancePx:round(prediction.highSpeedAdvancePx,4),accelerationPredictionPx:round(prediction.accelerationPx,4),accelerationUsed:prediction.accelerationUsed,highSpeedUsed:prediction.highSpeedUsed,adaptiveLeadMs:round(prediction.leadMs,3),adaptivePredictionPx:round(prediction.predictionPx,4),averageFrameMs:round(averageFrameMs,3),distanceToTriggerPx:round(target-cfg.tolerance-track.y,4),estimatedFrameTravelPx:round(track.speed*averageFrameMs,4),time:Math.round(time),previousEvent:previous?.type||null,previousGapMs:previous?Math.round(time-previous.time):null,appliedCorrection:correction[eventKey]||0,autoCorrectionPx:autoLead?.px||0,autoCorrectionBasis:autoLead?.reason||'none',autoCorrectionSamples:autoLead?.samples||0,effectiveCorrectionPx:(correction[eventKey]||0)+(autoLead?.px||0),firstSeenY:round(track.firstSeenY,2),observationCount:track.observationCount,maxObservationGapMs:round(track.maxObservationGapMs||0,2),lastObservationGapMs:round(track.lastObservationGapMs||0,2),lateSpawnSuppressed:!!track.suppressed,triggerSource:triggerMeta?.source||'visible',triggerGapMs:triggerMeta?.gapMs??0,triggerEstimatedY:triggerMeta?.estimatedMarkerY??null,triggerPredictedOvershootPx:triggerMeta?.predictedOvershootPx??null,feedbackGrade:null,feedbackDirection:null,feedbackDistanceM:null,feedback:null,feedbackTime:null};history.push(record);beginEventTrace(track,record,time);if(history.length>ENGINE.maxHistory)history.shift();if(prediction.highSpeedUsed){universalStats.highSpeedEvents++;universalStats.highSpeedPredictionUsed++;universalStats.totalAdvancePx+=prediction.highSpeedAdvancePx;universalStats.maximumAdvancePx=Math.max(universalStats.maximumAdvancePx,prediction.highSpeedAdvancePx);}else universalStats.fallbackCount++;if(prediction.accelerationUsed)universalStats.accelerationUsed++;analysisEvents.push({time:round(time,1),sequence:eventSequence,type,markerSpeedPxMs:round(track.speed,5),markerAccelerationPxMs2:round(track.acceleration,7),liveSpeedKmh:analysisLastSpeed});setMessage(LABELS[type]+' 실행');return true;}
+function executeEvent(track,predictedY,prediction,eventKey,target,autoLead,triggerMeta=null){const type=track.type;let success=false;if(type==='brakeOn'&&!brakeHeld)success=brake(true);else if(type==='brakeOff'&&brakeHeld)success=brake(false);else if(type==='boostOn'&&boostExpected==='boostOn'&&!boostHeld&&(cfg.boostZones===0||boostOnCount<cfg.boostZones)){success=boost(true);if(success)boostExpected='boostOff';}else if(type==='boostOff'&&boostExpected==='boostOff'&&boostHeld){success=boost(false);if(success)boostExpected='boostOn';}if(!success)return false;const time=nowMs(),previous=history[history.length-1];eventSequence++;const record={sequence:eventSequence,eventKey,type,event:LABELS[type],y:round(track.y,2),predictedY:round(predictedY,3),targetY:target,triggerLineY:target-cfg.tolerance,speed:round(track.speed,5),acceleration:round(track.acceleration,7),accelerationSamples:track.accelerationSamples,accelerationStable:track.accelerationStable,predictionMode:prediction.predictionMode,basePredictionPx:round(prediction.basePredictionPx,4),frameAdvancePx:round(prediction.frameAdvancePx,4),highSpeedAdvancePx:round(prediction.highSpeedAdvancePx,4),accelerationPredictionPx:round(prediction.accelerationPx,4),accelerationUsed:prediction.accelerationUsed,highSpeedUsed:prediction.highSpeedUsed,adaptiveLeadMs:round(prediction.leadMs,3),adaptivePredictionPx:round(prediction.predictionPx,4),averageFrameMs:round(averageFrameMs,3),distanceToTriggerPx:round(target-cfg.tolerance-track.y,4),estimatedFrameTravelPx:round(track.speed*averageFrameMs,4),time:Math.round(time),previousEvent:previous?.type||null,previousGapMs:previous?Math.round(time-previous.time):null,appliedCorrection:correction[eventKey]||0,autoCorrectionPx:autoLead?.px||0,autoCorrectionBasis:autoLead?.reason||'none',autoCorrectionSamples:autoLead?.samples||0,effectiveCorrectionPx:(correction[eventKey]||0)+(autoLead?.px||0),firstSeenY:round(track.firstSeenY,2),observationCount:track.observationCount,maxObservationGapMs:round(track.maxObservationGapMs||0,2),lastObservationGapMs:round(track.lastObservationGapMs||0,2),lateSpawnSuppressed:!!track.suppressed,triggerSource:triggerMeta?.source||'visible',triggerGapMs:triggerMeta?.gapMs??0,triggerEstimatedY:triggerMeta?.estimatedMarkerY??null,triggerPredictedOvershootPx:triggerMeta?.predictedOvershootPx??null,triggerAnticipationPx:triggerMeta?.anticipationPx??0,feedbackGrade:null,feedbackDirection:null,feedbackDistanceM:null,feedback:null,feedbackTime:null};history.push(record);beginEventTrace(track,record,time);if(history.length>ENGINE.maxHistory)history.shift();if(prediction.highSpeedUsed){universalStats.highSpeedEvents++;universalStats.highSpeedPredictionUsed++;universalStats.totalAdvancePx+=prediction.highSpeedAdvancePx;universalStats.maximumAdvancePx=Math.max(universalStats.maximumAdvancePx,prediction.highSpeedAdvancePx);}else universalStats.fallbackCount++;if(prediction.accelerationUsed)universalStats.accelerationUsed++;analysisEvents.push({time:round(time,1),sequence:eventSequence,type,markerSpeedPxMs:round(track.speed,5),markerAccelerationPxMs2:round(track.acceleration,7),liveSpeedKmh:analysisLastSpeed});setMessage(LABELS[type]+' 실행');return true;}
 function updateTracks(bands,now){
   const used=new Set(),sorted=[...bands].sort((a,b)=>b.y-a.y);
   for(const band of sorted){
@@ -441,7 +500,7 @@ function updateTracks(bands,now){
       if(executeEvent(best,predictedY,prediction,eventKey,target,autoLead))best.triggered=true;
     }
   }
-  for(const track of tracks)if(!used.has(track.id)){tryShortGapCoast(track,now);track.missing++;}
+  for(const track of tracks)if(!used.has(track.id)){if(!tryShortGapCoast(track,now))trySparseBoostCoast(track,now);track.missing++;}
   tracks=tracks.filter(track=>track.missing<=12);
   render();
 }
