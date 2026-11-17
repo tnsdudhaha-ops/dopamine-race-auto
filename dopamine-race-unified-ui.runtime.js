@@ -197,7 +197,10 @@ q('#du-analyze').onclick=()=>toggle('report');q('#du-report-close').onclick=()=>
 q('#du-log').onclick=()=>{press('copy-btn');say('입력 기록 복사 실행');};
 async function allSavedRuns(){
   const local=JSON.parse(localStorage.getItem('dopamine-auto-v336:runs')||'[]');
-  const archived=await window.__duRunArchive?.all()||[],byId=new Map();
+  let archived=[];
+  try{archived=await window.__duRunArchive?.all()||[];}
+  catch(e){console.warn('[Dopamine Unified] Archive export unavailable; using available local runs:',String(e));}
+  const byId=new Map();
   for(const run of archived)if(run?.runId)byId.set(run.runId,run);
   for(const run of local)if(run?.runId)byId.set(run.runId,run);
   if(window.__duUnsavedRun?.runId)byId.set(window.__duUnsavedRun.runId,window.__duUnsavedRun);
