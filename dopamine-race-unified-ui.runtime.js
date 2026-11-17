@@ -49,55 +49,71 @@ const cloudUploader=(()=>{
   const RUNS_KEY='dopamine-auto-v336:runs';
   const CFG_URL='dopamine-uploader:url',CFG_KEY='dopamine-uploader:key',SENT_KEY='dopamine-uploader:sent';
   const ENDPOINT_PATTERN=/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/;
-  let sending=false,retryAfter=0,message='초기화 중',lastSuccess='',timer=null,disposed=false;
+  let sending=false,checking=false,retryAfter=0,message='초기화 중',lastSuccess='',timer=null,disposed=false;
+  let lastDiagnostic={localCount:0,localPending:0,lastLocalRunId:null,lastChecked:null,archiveFallback:false};
   const read=(k,fallback='')=>{try{return GM_getValue(k,fallback);}catch(_){return fallback;}};
   const write=(k,v)=>GM_setValue(k,v);
   const sentIds=()=>{try{const arr=JSON.parse(read(SENT_KEY,'[]'));return Array.isArray(arr)?arr:[];}catch(_){return [];}};
-  const state=()=>({message,sending,configured:!!(read(CFG_URL)&&read(CFG_KEY)),lastSuccess});
+  const state=()=>({message,sending,checking,configured:!!(read(CFG_URL)&&read(CFG_KEY)),lastSuccess,sentCount:sentIds().length,...lastDiagnostic});
   function report(msg){message=msg;const e=q('#du-cloud-state');if(e)e.textContent='☁ Google Sheets · '+msg;console.info('[Dopamine Unified] Sheets:',msg);}
-  function uploadPending(force=false){
+  async function uploadPending(force=false){
     if(disposed)return;
-    if(sending){if(force)report('전송 중 · 완료 후 자동 재확인');return;}
+    if(sending||checking){if(force)report('전송/기록 검사 중 · 완료 후 재확인');return;}
     if(Date.now()<retryAfter&&!force)return;
     const url=read(CFG_URL),key=read(CFG_KEY);
     if(!url||!key||!ENDPOINT_PATTERN.test(url)){report('연결 설정 필요 · ⚙ → 시트 연결 설정');return;}
-    let runs;
-    try{runs=JSON.parse(localStorage.getItem(RUNS_KEY)||'[]');if(!Array.isArray(runs))throw Error('기록 형식 오류');}
-    catch(e){report('로컬 기록 읽기 실패 · '+String(e?.message||e));return;}
-    const sent=new Set(sentIds());
-    const pending=runs.filter(r=>r&&r.runId&&!sent.has(r.runId));
-    if(!pending.length){report('전송 완료 · 로컬 '+runs.length+'건 확인');return;}
-    const sourceRun=pending[0];
-    // Include the Korean local representation for historical queued runs as well.
-    // Do not rewrite the canonical source UTC time or the locally saved original.
-    const timestamp=Date.parse(sourceRun.time||'');
-    const run=Number.isFinite(timestamp)?{
-      ...sourceRun,
-      timeKst:new Date(timestamp+9*60*60*1000).toISOString().replace('Z','+09:00'),
-      timeZone:'Asia/Seoul'
-    }:sourceRun;
-    const body=JSON.stringify({uploadKey:key,run});
-    if(body.length>1800000){retryAfter=Date.now()+60000;report('기록 용량 초과 · '+run.runId);return;}
-    sending=true;report('전송 중 · 미전송 '+pending.length+'건 · '+run.runId);
-    try{GM_xmlhttpRequest({
-      method:'POST',url,
-      headers:{'Content-Type':'text/plain;charset=utf-8'},data:body,timeout:30000,
-      onload(response){
-        sending=false;if(disposed)return;
-        let result;try{result=JSON.parse(response.responseText||'');}catch(_){}
-        if(response.status>=200&&response.status<300&&result?.ok===true&&
-           (result.status==='SAVED'||result.status==='ALREADY_SAVED')&&result.runId===run.runId){
-          const ids=sentIds();if(!ids.includes(run.runId))ids.push(run.runId);
-          write(SENT_KEY,JSON.stringify(ids.slice(-1000)));
-          lastSuccess=run.runId;retryAfter=0;
-          report((result.status==='ALREADY_SAVED'?'기존 기록 확인':'저장 성공')+' · '+run.runId);
-          setTimeout(()=>uploadPending(),1000);
-        }else{retryAfter=Date.now()+60000;report('전송 실패 · '+(result?.status||'HTTP '+response.status)+' · 60초 후 재시도');}
-      },
-      onerror(){sending=false;retryAfter=Date.now()+60000;report('네트워크 오류 · 60초 후 재시도');},
-      ontimeout(){sending=false;retryAfter=Date.now()+60000;report('응답 시간 초과 · 60초 후 재시도');}
-    });}catch(e){sending=false;retryAfter=Date.now()+60000;report('전송 실행 오류 · '+String(e?.message||e));}
+    checking=true;
+    try{
+      let runs=[];
+      try{
+        const data=JSON.parse(localStorage.getItem(RUNS_KEY)||'[]');
+        if(!Array.isArray(data))throw Error('기록 형식 오류');
+        runs=data;
+      }catch(e){report('⚠ 로컬 기록 읽기 실패 · 보관소 복구 시도');}
+      const sent=new Set(sentIds()),pending=runs.filter(r=>r?.runId&&!sent.has(r.runId));
+      let sourceRun=pending[0]||null;
+      lastDiagnostic={localCount:runs.length,localPending:pending.length,lastLocalRunId:runs.at(-1)?.runId||null,lastChecked:new Date().toISOString(),archiveFallback:false};
+      if(!sourceRun){
+        try{sourceRun=await window.__duRunArchive?.firstUnsent(sent)||null;if(sourceRun)lastDiagnostic.archiveFallback=true;}
+        catch(e){retryAfter=Date.now()+60000;report('보관소 확인 오류 · '+String(e?.message||e).slice(0,80));return;}
+      }
+      if(!sourceRun){report('전송 대기 0건 · 로컬 '+runs.length+'건 확인');return;}
+      const timestamp=Date.parse(sourceRun.time||'');
+      if(!Number.isFinite(timestamp)){report('원본 주행시각 확인 필요 · '+sourceRun.runId);return;}
+      const run={...sourceRun,timeKst:new Date(timestamp+9*60*60*1000).toISOString().replace('Z','+09:00'),timeZone:'Asia/Seoul'};
+      const body=JSON.stringify({uploadKey:key,run});
+      if(body.length>1800000){retryAfter=Date.now()+60000;report('기록 용량 초과 · '+run.runId);return;}
+      sending=true;report('전송 중 · '+(lastDiagnostic.archiveFallback?'보관소 복구':'로컬 대기 '+pending.length+'건')+' · '+run.runId);
+      try{GM_xmlhttpRequest({
+        method:'POST',url,
+        headers:{'Content-Type':'text/plain;charset=utf-8'},data:body,timeout:30000,
+        onload(response){
+          sending=false;if(disposed)return;
+          let result;try{result=JSON.parse(response.responseText||'');}catch(_){}
+          if(response.status>=200&&response.status<300&&result?.ok===true&&
+            (result.status==='SAVED'||result.status==='ALREADY_SAVED')&&result.runId===run.runId){
+            try{
+              const ids=sentIds();if(!ids.includes(run.runId))ids.push(run.runId);
+              write(SENT_KEY,JSON.stringify(ids.slice(-1000)));
+            }catch(e){report('서버 응답 수신 · 전송확인 로컬 저장 실패 · '+run.runId);return;}
+            lastSuccess=run.runId;retryAfter=0;
+            report((result.status==='ALREADY_SAVED'?'기존 기록 확인':'서버 저장 응답')+' · '+run.runId);
+            setTimeout(()=>uploadPending(),1000);
+          }else{retryAfter=Date.now()+60000;report('전송 실패 · '+(result?.status||'HTTP '+response.status)+' · '+run.runId+' · 60초 후 재시도');}
+        },
+        onerror(){sending=false;retryAfter=Date.now()+60000;report('네트워크 오류 · '+run.runId+' · 60초 후 재시도');},
+        ontimeout(){sending=false;retryAfter=Date.now()+60000;report('응답 시간 초과 · '+run.runId+' · 60초 후 재시도');}
+      });}catch(e){sending=false;retryAfter=Date.now()+60000;report('전송 실행 오류 · '+String(e?.message||e));}
+    }finally{checking=false;}
   }
+  // Back up legacy localStorage runs in IndexedDB; original records are never deleted.
+  async function archiveExisting(){
+    try{
+      const runs=JSON.parse(localStorage.getItem(RUNS_KEY)||'[]');
+      if(Array.isArray(runs)&&runs.length)await window.__duRunArchive?.putMany(runs);
+    }catch(e){console.warn('[Dopamine Unified] Archive backfill failed:',String(e));}
+  }
+  archiveExisting();
   function configure(){
     const previous=String(read(CFG_URL,'')||'');
     const url=window.prompt('Google Apps Script 웹 앱 URL (/exec)을 입력하세요.',previous);
@@ -113,7 +129,7 @@ const cloudUploader=(()=>{
   report(read(CFG_URL)&&read(CFG_KEY)?'연결됨 · 로컬 기록 검사 중':'연결 설정 필요 · ⚙ → 시트 연결 설정');
   timer=setInterval(()=>uploadPending(),7000);
   setTimeout(()=>uploadPending(),2500);
-  return {configure,retry:()=>{retryAfter=0;uploadPending(true);},state,destroy:()=>{disposed=true;clearInterval(timer);}};
+  return {configure,retry:()=>{retryAfter=0;uploadPending(true);},state,acknowledgedIds:sentIds,destroy:()=>{disposed=true;clearInterval(timer);}};
 })();
 const fieldNames=[['brakeY','브레이크 판정선 Y'],['boostY','부스터 판정선 Y'],['brakeOffset','브레이크 보정 px'],['boostOffset','부스터 보정 px'],['predictionMs','예측 시간 ms'],['boostZones','부스터 구간 수'],['colorTolerance','색상 허용 오차'],['tolerance','판정 허용 오차']];
 let view='race',notice='',drag=null,moved=false;
