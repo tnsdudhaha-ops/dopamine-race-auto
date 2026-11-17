@@ -664,3 +664,9 @@
 - **[AUTO dev v3.3.31]** `dopamine-race-auto.user.js`의 주행 결과 JSON에 기존 `time`(UTC ISO `Z`)을 그대로 유지하고, 같은 타임스탬프를 변환한 `timeKst`(ISO `+09:00`)와 `timeZone:'Asia/Seoul'`을 추가. UTC 타임스탬프를 변경하지 않아 중복 +9시간 이동을 예방. 주행 예측식/ENGINE/출발·종료 엔진 로직 불변. 코드 커밋 `682d6ec41fb44132c2e4e6dc44477626b1ba2a11`.
 - **[미전송 호환]** `dopamine-race-unified-ui.runtime.js` 업로더는 과거에 저장된 UTC만 포함한 대기 기록을 POST 전 얕게 복사하여 `timeKst`/`timeZone`을 추가. 원본 로컬 파일/주행 ID/UTC는 수정하지 않음. 커밋 `44a1a230ceed646d2f0fef93d3c4cddcf59f4cf5`. 기존 GitHub 고정 부트스트랩 `dopamine-race-unified.user.js` v1.1.0 유지.
 - **[검증/미검증]** GitHub 업데이트·구문 검사 및 UTC→KST 수학 검증·Google Sheets A열 수정/재조회 통과. Apps Script 서버 소스와 실제 새 주행 업로드 경로의 동작은 아직 직접 검증하지 못함. 신규 JSON의 `timeKst`가 Drive에서 실제 보존되는지, 서버가 자동 생성하는 새 Sheets A열이 KST로 들어오는지는 새 주행 1건이 접수되면 확인 필요. **새로운 Release는 승인 없이 지정하지 않음.**
+
+
+### 2026-11-18 KST · 사용자 확정: 주행시각만 KST, 74개 원본 JSON 대조 정정
+- **[사용자 확정]** Google Sheets의 날짜 열은 **`주행시각(KST)` 한 열만** 사용한다. `서버 저장시각(KST)` 열은 불필요하며 생성하지 않는다. 업로드 지연에 따른 몇 초 정도의 차이는 용인하되, 시간대는 KST로 정확히 기록한다.
+- **[시트 변경·검증]** 원본 Google Sheets `도파민레이스_AUTO_주행기록` / `주행기록` 탭의 **A1을 `주행시각(KST)`로 변경**, 원본 JSON 74개를 각각 조회하여 `time`(UTC ISO `Z`)을 **UTC+09:00**으로 변환하고 **A2:A75 74건 전체**를 보정함. 주행ID와 각 JSON의 runId 일치 여부를 확인하고 변경 전 원본 JSON/차량/주행버전/코스 열은 유지. A열 24시 형식 `yyyy-mm-dd hh:mm:ss`; 시트 시간대 `Asia/Seoul`. 예: `mwjvbzmu-fns7mnw`의 2026-11-17 기존 08:03:09(접수 시각)가 실제 기록 08:02:59로 정정; 지연 전송 `mwis5k16-2bk6sxs`는 13:50:32에서 원본 기록 13:46:16으로 정정.
+- **[소스 코드 현황]** AUTO v3.3.31은 `time` UTC 원본과 `timeKst`(`+09:00` ISO)를 동시에 보존하고 통합 UI 업로더는 재전송 시에도 `timeKst`를 포함한다. **주행 엔진 및 기존 Release 기준선 변화 없음**. 서버 Google Apps Script 프로젝트에는 접근할 수 없으므로 새 업로드의 A열이 서버에 의해 어떤 시각으로 기록되는지는 아직 실주행 새 1건 검증이 필요하다. 오류 발생 시 서버에서 `run.timeKst`를 `주행시각(KST)` 열에 쓰도록 조정해야 한다. 미검증된 서버 동작을 확정하지 않는다.
