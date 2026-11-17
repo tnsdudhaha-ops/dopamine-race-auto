@@ -1,6 +1,6 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-17T03:41:14.032Z",
+  "generatedAt": "2026-11-17T08:30:23.925Z",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0",
   "participants": [
@@ -100,9 +100,9 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-16T05:11:52.816Z",
-      "modelCount": 11,
-      "vehicleCount": 11,
+      "updatedAt": "2026-11-17T08:30:18.081Z",
+      "modelCount": 12,
+      "vehicleCount": 12,
       "vehicles": [
         {
           "grade": "SSR",
@@ -142,6 +142,13 @@
         {
           "grade": "S",
           "model": "토요타 GR86",
+          "maxStars": 3,
+          "quantity": 1,
+          "starBreakdown": []
+        },
+        {
+          "grade": "S",
+          "model": "현대 아반떼 N",
           "maxStars": 3,
           "quantity": 1,
           "starBreakdown": []
@@ -355,9 +362,9 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-16T05:11:56.951Z",
-      "modelCount": 7,
-      "vehicleCount": 7,
+      "updatedAt": "2026-11-17T08:30:22.207Z",
+      "modelCount": 6,
+      "vehicleCount": 6,
       "vehicles": [
         {
           "grade": "SSR",
@@ -377,13 +384,6 @@
           "grade": "S",
           "model": "볼보 XC40",
           "maxStars": 2,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "S",
-          "model": "토요타 GR86",
-          "maxStars": 1,
           "quantity": 1,
           "starBreakdown": []
         },
@@ -412,9 +412,9 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-16T22:14:53.113Z",
-      "modelCount": 10,
-      "vehicleCount": 13,
+      "updatedAt": "2026-11-17T08:30:23.567Z",
+      "modelCount": 9,
+      "vehicleCount": 10,
       "vehicles": [
         {
           "grade": "SR",
@@ -433,32 +433,20 @@
         {
           "grade": "S",
           "model": "토요타 GR86",
-          "maxStars": 3,
+          "maxStars": 4,
           "quantity": 1,
           "starBreakdown": []
         },
         {
           "grade": "S",
           "model": "현대 싼타페",
-          "maxStars": 2,
-          "quantity": 2,
-          "starBreakdown": [
-            {
-              "stars": 2,
-              "qty": 2
-            }
-          ]
-        },
-        {
-          "grade": "S",
-          "model": "현대 쏘나타",
           "maxStars": 3,
           "quantity": 1,
           "starBreakdown": []
         },
         {
           "grade": "S",
-          "model": "현대 아반떼 N",
+          "model": "현대 쏘나타",
           "maxStars": 3,
           "quantity": 1,
           "starBreakdown": []
@@ -496,18 +484,9 @@
         {
           "grade": "R",
           "model": "현대 포터",
-          "maxStars": 2,
-          "quantity": 2,
-          "starBreakdown": [
-            {
-              "stars": 2,
-              "qty": 1
-            },
-            {
-              "stars": 1,
-              "qty": 1
-            }
-          ]
+          "maxStars": 3,
+          "quantity": 1,
+          "starBreakdown": []
         }
       ]
     }
