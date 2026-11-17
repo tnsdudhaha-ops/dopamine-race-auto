@@ -153,8 +153,7 @@ function observeRecorderState(auto){
  };
  const prior=auditPrevious;
  auditPrevious=state;
- if(!prior)return; // first observation establishes the baseline after page load
- const changed=Object.keys(state).filter(k=>state[k]!==prior[k]);
+ const changed=prior?Object.keys(state).filter(k=>state[k]!==prior[k]):['initial'];
  if(!changed.length)return;
  // GM storage is separate from game-origin localStorage; it remains writable
  // when the legacy race-results array exhausts its localStorage quota.
