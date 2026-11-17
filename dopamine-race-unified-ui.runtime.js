@@ -1,6 +1,6 @@
 // Dopamine Unified UI runtime — loaded from pinned GitHub commit by the stable bootstrap.
 // This file is not a userscript. The bootstrap provides page window and GM upload functions.
-// UI revision: stable viewport position across finish modal and race-to-lobby resizing; uploader and frozen bootstrap unchanged.
+// UI revision: stable finish-screen position; uploader adds KST metadata while keeping canonical UTC and frozen bootstrap unchanged.
 (function () {
 'use strict';
 if(window.__dopamineUnifiedControl?.active)return;
@@ -67,7 +67,16 @@ const cloudUploader=(()=>{
     const sent=new Set(sentIds());
     const pending=runs.filter(r=>r&&r.runId&&!sent.has(r.runId));
     if(!pending.length){report('전송 완료 · 로컬 '+runs.length+'건 확인');return;}
-    const run=pending[0],body=JSON.stringify({uploadKey:key,run});
+    const sourceRun=pending[0];
+    // Include the Korean local representation for historical queued runs as well.
+    // Do not rewrite the canonical source UTC time or the locally saved original.
+    const timestamp=Date.parse(sourceRun.time||'');
+    const run=Number.isFinite(timestamp)?{
+      ...sourceRun,
+      timeKst:new Date(timestamp+9*60*60*1000).toISOString().replace('Z','+09:00'),
+      timeZone:'Asia/Seoul'
+    }:sourceRun;
+    const body=JSON.stringify({uploadKey:key,run});
     if(body.length>1800000){retryAfter=Date.now()+60000;report('기록 용량 초과 · '+run.runId);return;}
     sending=true;report('전송 중 · 미전송 '+pending.length+'건 · '+run.runId);
     try{GM_xmlhttpRequest({
