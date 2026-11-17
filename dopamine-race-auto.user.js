@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.30
-// @description  Release 3.0 / 예측식 동결 / 완주 확정 학습·최근 프레임 품질 검사·오보정 방지
+// @version      3.3.31
+// @description  Release 3.0 / 예측식 동결 / 완주 확정 학습·UTC+KST 동시 기록
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
@@ -13,7 +13,7 @@
 'use strict';
 // Avoid duplicate driving engines when the stable unified GitHub loader is active.
 if(window.__duMode&&!window.__duUnifiedLoadingAuto)return;
-const VERSION='3.3.30', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.31', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -595,6 +595,9 @@ function saveRun(reason){
   const result={runId,version:VERSION,courseId,courseName,courseScope,vehicle:profileAtStart,vehicleKey:vehicleKey(profileAtStart),manualProfile:profile||null,
     observationLearning:{mode:'completed-only-per-event',committed:observationCommitted,excludedReason:observationCommitted?null:!complete?'incomplete':!allEvents?'ungraded-events':'no-eligible-observation-or-storage-failed',profileKey:observeState?.identity||null,runFeedback:observeRunCount,runGreat:observeRunGreat,eligibleFeedback:history.filter(x=>x.autoLearningEligible).length,totalProfileFeedback:observeState?.totalFeedback||0,autoCorrectionAppliedEvents:history.filter(x=>x.autoCorrectionPx!==0).length,minSamples:AUTO_TUNE.minSamples},traceCapture:{beforeFrames:TRACE_PRE,afterFrames:TRACE_POST,windowMs:TRACE_WINDOW_MS},
     reason,complete,observedRaceDurationMs,observedRaceDurationSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),raceDurationSource:observedRaceDurationMs===null?null:'client-start-light-to-first-finish-phase',gameTiming,wheelLockResultEvidence:complete?wheelLockAtFinish:null,wheelLockObservations:wheelLockObservations.slice(),crossTrackFeedback:summarizeCrossTrackFeedback(),completionEvidence:{allEvents,allSegments,phase:root()?.dataset.phase||null},detectionHealth:{...detectionHealth},detectionAlerts:detectionAlerts.slice(),shortGapCoast:{enabled:true,guard:{...COAST_GUARD},triggeredCount:detectionHealth.coastTriggers},sparseBoostCoast:{enabled:true,guard:{...SPARSE_BOOST_GUARD},triggeredCount:detectionHealth.sparseBoostTriggers},ungradedEventKeys:history.filter(x=>x.feedbackGrade===null).map(x=>x.eventKey),time:new Date().toISOString(),
+    // Keep the canonical instant in UTC and add its KST ISO-8601 representation.
+    // Using the UTC instant (rather than the device's local clock formatting) avoids a second +9h shift.
+    timeKst:null,timeZone:'Asia/Seoul',
     events:history.length,grades,displayTopSpeedKmh:profileAtStart?.displayTopSpeedKmh??null,
     measuredMaxSpeedKmh:analysisMaxSpeed,meanAccelerationKmhPerSec:accel.length?round(accel.reduce((s,x)=>s+x,0)/accel.length,4):null,
     medianPositiveAccelerationKmhPerSec:median(positive),maxAccelerationKmhPerSec:accel.length?accel[accel.length-1]:null,
@@ -602,6 +605,8 @@ function saveRun(reason){
     segmentSpeedsKmh:segmentResults.map(s=>s.speedKmh).filter(x=>x!==null),
     history:history.map(x=>({...x})),feedbackLog:feedbackLog.map(x=>({...x})),segmentResults:segmentResults.map(x=>({...x})),
     speedSamples:analysisSamples.slice(),accelerationSamples:analysisAccel.slice()};
+  // Convert the exact same UTC instant to Asia/Seoul (fixed UTC+09, no daylight saving).
+  result.timeKst=new Date(Date.parse(result.time)+9*60*60*1000).toISOString().replace('Z','+09:00');
   runs.push(result);
   try{localStorage.setItem(ANALYSIS_KEY,JSON.stringify(runs.slice(-MAX_RUNS)));runFinalized=true;savedRunCount=Math.min(runs.length,MAX_RUNS);lastSavedTiming={...gameTiming,clientElapsedSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),complete};}
   catch(_){setMessage('분석 저장 공간 부족: 분석 기록을 복사하여 백업하세요');}
