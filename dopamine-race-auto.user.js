@@ -452,6 +452,9 @@ function clickGameButton(el){if(!el||!el.isConnected||el.disabled||el.getAttribu
 function stopChain(message='연속 주행 중지',stopDrive=true){chainEnabled=false;chainPendingReturn=false;chainTire=null;chainDeadline=0;chainNextAt=0;if(chainTimer!==null){clearInterval(chainTimer);chainTimer=null;}if(stopDrive&&running)stop(false,'stopped');chainSay(message);}
 function chainTick(){
   if(!chainEnabled||destroyed)return;
+  // Never launch another race until the previous race's overflow archive transaction commits.
+  if(lastRunPersistence.status==='archive-pending')return;
+  if(lastRunPersistence.status==='failed'){stopChain('기록 저장 실패 · 안전 중단',false);return;}
   const t=Date.now();if(t<chainNextAt)return;
   if(running){chainDeadline=0;return;}
   // Only after the current race has ended and been saved. Never touch the game mid-race.
@@ -660,6 +663,9 @@ function saveRun(reason){
   try{archiveWrite=runArchive.put(result);}catch(e){archiveWrite=Promise.reject(e);}
   let localSaved=false,localError=null;
   try{
+    // If legacy JSON became unreadable, never overwrite its raw bytes with an empty list.
+    const previous=localStorage.getItem(ANALYSIS_KEY);
+    if(previous&& !Array.isArray(JSON.parse(previous)))throw Error('Existing run index invalid');
     localStorage.setItem(ANALYSIS_KEY,JSON.stringify(runs.slice(-MAX_RUNS)));
     localSaved=true;
   }catch(e){localError=String(e?.message||e);}
