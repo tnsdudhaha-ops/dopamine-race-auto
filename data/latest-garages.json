@@ -1,6 +1,6 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-16T22:14:53.475Z",
+  "generatedAt": "2026-11-17T01:05:32.306Z",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0",
   "participants": [
@@ -263,9 +263,9 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-16T22:14:50.286Z",
-      "modelCount": 10,
-      "vehicleCount": 10,
+      "updatedAt": "2026-11-17T01:05:28.796Z",
+      "modelCount": 11,
+      "vehicleCount": 11,
       "vehicles": [
         {
           "grade": "SR",
@@ -306,6 +306,13 @@
           "grade": "S",
           "model": "토요타 GR86",
           "maxStars": 1,
+          "quantity": 1,
+          "starBreakdown": []
+        },
+        {
+          "grade": "S",
+          "model": "현대 싼타페",
+          "maxStars": 2,
           "quantity": 1,
           "starBreakdown": []
         },
