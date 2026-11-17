@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.32
+// @version      3.3.33
 // @description  Release 3.0 / 예측식 동결 / 주행기록 용량초과 대비·이중 보관 및 전송 진단
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
@@ -13,7 +13,7 @@
 'use strict';
 // Avoid duplicate driving engines when the stable unified GitHub loader is active.
 if(window.__duMode&&!window.__duUnifiedLoadingAuto)return;
-const VERSION='3.3.32', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.33', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -855,5 +855,5 @@ function render(){const cs=$('#chain-status');if(cs)cs.textContent='연속: '+(c
 function setMessage(m){lastMessage=m;render();}
 function onResize(){placeUI();}function onPageHide(){if(chainEnabled)stopChain('페이지 이동으로 중지');else stop(false);}function destroy(){if(destroyed)return;destroyed=true;clearInterval(lobbyInfoTimer);if(chainEnabled)stopChain('스크립트 교체로 중지');else stop(false);window.removeEventListener('resize',onResize);window.removeEventListener('pagehide',onPageHide);ui.remove();if(window[INSTANCE]?.destroy===destroy)delete window[INSTANCE];if(window.__duMode&&window.__duAuto)delete window.__duAuto;}
 const lobbyInfoTimer=setInterval(refreshLobbyInfo,1500);
-window.addEventListener('resize',onResize);window.addEventListener('pagehide',onPageHide);window[INSTANCE]={destroy};const priorTimingRun=readSavedRuns().slice(-1)[0];if(priorTimingRun?.gameTiming)lastSavedTiming={...priorTimingRun.gameTiming,clientElapsedSec:priorTimingRun.observedRaceDurationSec??null,complete:priorTimingRun.complete};if(window.__duMode){window.__duAuto={state:()=>({version:VERSION,running,chainEnabled,chainRuns,chainMaxRuns,chainState,chainCounts,lastMessage,courseName,stats:{...stats},stopAfterCurrent,learningMode:'confidence-gated',learningProfileKey:observeState?.identity||null,lastRaceTiming:lastSavedTiming,currentGameHudSec:gameClockLast,lastRunPersistence:{...lastRunPersistence},localRunCount:readSavedRuns().length})};}loadProfile();updateInputs();restorePosition();detectCourse();refreshVehicle();refreshLobbyInfo();collapsePanel();render();
+window.addEventListener('resize',onResize);window.addEventListener('pagehide',onPageHide);window[INSTANCE]={destroy};const priorTimingRun=readSavedRuns().slice(-1)[0];if(priorTimingRun?.gameTiming)lastSavedTiming={...priorTimingRun.gameTiming,clientElapsedSec:priorTimingRun.observedRaceDurationSec??null,complete:priorTimingRun.complete};if(window.__duMode){window.__duAuto={state:()=>({version:VERSION,running,chainEnabled,chainRuns,chainMaxRuns,chainState,chainCounts,lastMessage,courseName,stats:{...stats},stopAfterCurrent,learningMode:'confidence-gated',learningProfileKey:observeState?.identity||null,lastRaceTiming:lastSavedTiming,currentGameHudSec:gameClockLast,lastRunPersistence:{...lastRunPersistence},localRunCount:savedRunCount})};}loadProfile();updateInputs();restorePosition();detectCourse();refreshVehicle();refreshLobbyInfo();collapsePanel();render();
 })();
