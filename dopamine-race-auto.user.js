@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.31
-// @description  Release 3.0 / 예측식 동결 / 완주 확정 학습·UTC+KST 동시 기록
+// @version      3.3.32
+// @description  Release 3.0 / 예측식 동결 / 주행기록 용량초과 대비·이중 보관 및 전송 진단
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
@@ -13,7 +13,7 @@
 'use strict';
 // Avoid duplicate driving engines when the stable unified GitHub loader is active.
 if(window.__duMode&&!window.__duUnifiedLoadingAuto)return;
-const VERSION='3.3.31', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.32', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -555,9 +555,54 @@ function recordTelemetry(now){
   analysisSamples.push({t:round(now,1),kmh});
   if(analysisSamples.length>MAX_SAMPLES)analysisSamples.shift();
 }
+// Durable overflow archive. Never remove legacy localStorage records automatically.
+// IndexedDB is shared by the AUTO engine and the unified uploader on this origin.
+const RUN_ARCHIVE_DB='dopamine-auto-record-archive-v1',RUN_ARCHIVE_STORE='runs';
+let archiveConnection=null;
+function openRunArchive(){
+  if(archiveConnection)return archiveConnection;
+  archiveConnection=new Promise((resolve,reject)=>{
+    if(!window.indexedDB){reject(Error('IndexedDB unavailable'));return;}
+    let req;
+    try{req=window.indexedDB.open(RUN_ARCHIVE_DB,1);}catch(e){reject(e);return;}
+    req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains(RUN_ARCHIVE_STORE))req.result.createObjectStore(RUN_ARCHIVE_STORE,{keyPath:'runId'});};
+    req.onsuccess=()=>{const db=req.result;db.onversionchange=()=>{db.close();archiveConnection=null;};resolve(db);};
+    req.onerror=()=>{archiveConnection=null;reject(req.error||Error('IndexedDB open failed'));};
+    req.onblocked=()=>{archiveConnection=null;reject(Error('IndexedDB blocked'));};
+  });
+  return archiveConnection;
+}
+const runArchive={
+  async put(run){if(!run?.runId)throw Error('Missing runId');const db=await openRunArchive();return new Promise((resolve,reject)=>{
+    const tx=db.transaction(RUN_ARCHIVE_STORE,'readwrite');
+    tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error||Error('Archive write failed'));tx.onabort=()=>reject(tx.error||Error('Archive write aborted'));
+    tx.objectStore(RUN_ARCHIVE_STORE).put(run);
+  });},
+  async putMany(runs){const valid=(runs||[]).filter(r=>r&&r.runId);if(!valid.length)return 0;const db=await openRunArchive();return new Promise((resolve,reject)=>{
+    const tx=db.transaction(RUN_ARCHIVE_STORE,'readwrite');
+    tx.oncomplete=()=>resolve(valid.length);tx.onerror=()=>reject(tx.error||Error('Archive backfill failed'));tx.onabort=()=>reject(tx.error||Error('Archive backfill aborted'));
+    const store=tx.objectStore(RUN_ARCHIVE_STORE);
+    for(const run of valid)store.put(run);
+  });},
+  async firstUnsent(sent){const db=await openRunArchive();return new Promise((resolve,reject)=>{
+    const tx=db.transaction(RUN_ARCHIVE_STORE,'readonly'),store=tx.objectStore(RUN_ARCHIVE_STORE),keys=store.getAllKeys();
+    keys.onerror=()=>reject(keys.error||Error('Archive scan failed'));
+    keys.onsuccess=()=>{
+      const id=keys.result.find(key=>!sent.has(key));
+      if(!id){resolve(null);return;}
+      const get=store.get(id);get.onsuccess=()=>resolve(get.result||null);get.onerror=()=>reject(get.error||Error('Archive read failed'));
+    };
+  });},
+  async all(){const db=await openRunArchive();return new Promise((resolve,reject)=>{
+    const req=db.transaction(RUN_ARCHIVE_STORE,'readonly').objectStore(RUN_ARCHIVE_STORE).getAll();
+    req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error||Error('Archive export failed'));
+  });}
+};
+window.__duRunArchive=runArchive;
+let lastRunPersistence={status:'none',runId:null,error:null};
 function readSavedRuns(){try{const a=JSON.parse(localStorage.getItem(ANALYSIS_KEY)||'[]');return Array.isArray(a)?a:[];}catch(_){return [];}}
 function saveRun(reason){
-  if(!runId||!history.length||runFinalized)return;
+  if(!runId||runFinalized)return; // Persist even zero-event interrupted attempts for diagnosis.
   const runs=readSavedRuns();
   if(runs.some(r=>r.runId===runId)){runFinalized=true;return;}
   const grades=history.reduce((a,r)=>(r.feedbackGrade&&(a[r.feedbackGrade]=(a[r.feedbackGrade]||0)+1),a),{});
@@ -608,8 +653,37 @@ function saveRun(reason){
   // Convert the exact same UTC instant to Asia/Seoul (fixed UTC+09, no daylight saving).
   result.timeKst=new Date(Date.parse(result.time)+9*60*60*1000).toISOString().replace('Z','+09:00');
   runs.push(result);
-  try{localStorage.setItem(ANALYSIS_KEY,JSON.stringify(runs.slice(-MAX_RUNS)));runFinalized=true;savedRunCount=Math.min(runs.length,MAX_RUNS);lastSavedTiming={...gameTiming,clientElapsedSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),complete};}
-  catch(_){setMessage('분석 저장 공간 부족: 분석 기록을 복사하여 백업하세요');}
+  const completedTiming={...gameTiming,clientElapsedSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),complete};
+  // Start a second independent, durable write. Its result is checked below if the
+  // synchronous legacy localStorage save cannot fit another large telemetry JSON.
+  let archiveWrite;
+  try{archiveWrite=runArchive.put(result);}catch(e){archiveWrite=Promise.reject(e);}
+  let localSaved=false,localError=null;
+  try{
+    localStorage.setItem(ANALYSIS_KEY,JSON.stringify(runs.slice(-MAX_RUNS)));
+    localSaved=true;
+  }catch(e){localError=String(e?.message||e);}
+  // A completed race must never be silently considered safely recorded after a failed write.
+  runFinalized=true;
+  if(localSaved){
+    savedRunCount=Math.min(runs.length,MAX_RUNS);lastSavedTiming=completedTiming;
+    lastRunPersistence={status:'local',runId:result.runId,error:null};
+    archiveWrite.catch(e=>console.warn('[Dopamine AUTO] Additional archive write failed:',String(e)));
+  }else{
+    lastRunPersistence={status:'archive-pending',runId:result.runId,error:localError};
+    window.__duUnsavedRun=result; // last-chance in-memory export while backup completes
+    setMessage('⚠ 브라우저 용량 초과 · IndexedDB 보관 중 (페이지 이동 금지)');
+    archiveWrite.then(()=>{
+      if(window.__duUnsavedRun?.runId===result.runId)window.__duUnsavedRun=null;
+      lastRunPersistence={status:'archive',runId:result.runId,error:null};
+      savedRunCount=readSavedRuns().length+1;lastSavedTiming=completedTiming;
+      setMessage('✓ 원본 별도 보관 완료 · Google Sheets 전송 대기');
+    }).catch(e=>{
+      lastRunPersistence={status:'failed',runId:result.runId,error:localError+' / '+String(e?.message||e)};
+      if(chainEnabled)stopChain('기록 저장 실패 · 데이터 보호를 위해 연속 주행 중단',false);
+      setMessage('⛔ 주행 기록 영구 저장 실패 · ⚙ 도구에서 긴급 JSON 백업 필요');
+    });
+  }
 }
 function classify(r,g,b){if(Math.max(r,g,b)<95)return null;let bestType=null,bestDistance=Infinity;for(const [type,c] of Object.entries(COLORS)){const d=Math.hypot(r-c[0],g-c[1],b-c[2]);if(d<bestDistance){bestDistance=d;bestType=type;}}return bestDistance<=cfg.colorTolerance?bestType:null;}
 function scanBands(){const canvas=game()?.querySelector('canvas[aria-label="타임어택 주행 트랙"]');if(!canvas)return [];const x=Math.round(cfg.scanX),top=clamp(Math.floor(cfg.scanTop),0,canvas.height),bottom=clamp(Math.ceil(cfg.scanBottom),0,canvas.height);if(x<0||x>=canvas.width||bottom<=top)return [];let pixels;try{pixels=canvas.getContext('2d').getImageData(x,top,1,bottom-top).data;}catch(_){return [];}const bands=[];let current=null;function finish(){if(current&&current.count>=cfg.minBandPixels)bands.push({type:current.type,y:(current.start+current.end)/2});}for(let i=0;i<bottom-top;i++){const p=i*4,y=top+i,type=classify(pixels[p],pixels[p+1],pixels[p+2]);if(type&&current&&current.type===type&&y-current.end<=2){current.end=y;current.count++;}else{finish();current=type?{type,start:y,end:y,count:1}:null;}}finish();return bands;}
@@ -704,12 +778,12 @@ function drive(now){
     if(explicitFinish){
       if(!finishSeenAt){finishSeenAt=now;raceFinishedAtMs=now;finishReason='complete';}
       // 결과 메시지가 DOM에 반영될 시간을 확보한 뒤 확정.
-      if(now-finishSeenAt>=1000){const requested=stopAfterCurrent;stop(false,finishReason);if(requested){stopAfterCurrent=false;if(chainEnabled)stopChain('현재 판 완주 · 요청한 중지 완료',false);else setMessage('현재 판 완주·저장 후 중지 완료');return;}if(chainEnabled){chainPendingReturn=true;chainDeadline=Date.now()+18000;chainNextAt=Date.now()+650;chainSay('완주 저장 · 출발선 복귀 대기');}else setMessage('주행 기록 자동 저장 완료');return;}
+      if(now-finishSeenAt>=1000){const requested=stopAfterCurrent;stop(false,finishReason);if(requested){stopAfterCurrent=false;if(chainEnabled)stopChain('현재 판 완주 · 요청한 중지 완료',false);else setMessage('현재 판 완주·저장 후 중지 완료');return;}if(chainEnabled){chainPendingReturn=true;chainDeadline=Date.now()+18000;chainNextAt=Date.now()+650;chainSay('완주 저장 · 출발선 복귀 대기');}else setMessage(lastRunPersistence.status==='archive-pending'?'저장 공간 부족 · 별도 보관 중':lastRunPersistence.status==='failed'?'⛔ 기록 저장 실패':'주행 기록 자동 저장 완료');return;}
     }else{finishSeenAt=0;finishReason=null;}
   }
   raf=requestAnimationFrame(drive);
 }
-function stop(show=true,reason=null){const wasRunning=running;running=false;if(startTimer!==null){clearInterval(startTimer);startTimer=null;}if(raf!==null){cancelAnimationFrame(raf);raf=null;}brake(false);if(boostHeld){send('.boost-key',false);boostHeld=false;}feedbackObserver?.disconnect();feedbackObserver=null;feedbackElement=null;started=false;armed=false;tracks=[];if(wasRunning&&history.length)saveRun(reason||'stopped');if(show)setMessage('자동 플레이 중지');}
+function stop(show=true,reason=null){const wasRunning=running;running=false;if(startTimer!==null){clearInterval(startTimer);startTimer=null;}if(raf!==null){cancelAnimationFrame(raf);raf=null;}brake(false);if(boostHeld){send('.boost-key',false);boostHeld=false;}feedbackObserver?.disconnect();feedbackObserver=null;feedbackElement=null;started=false;armed=false;tracks=[];if(wasRunning)saveRun(reason||'stopped');if(show)setMessage('자동 플레이 중지');}
 function start(){stop(false);stopAfterCurrent=false;detectCourse();const doc=game();if(!doc){setMessage('타임어택 화면 없음');return;}if(root()?.dataset.phase!=='ready'){setMessage('게임 재시작 후 실행하세요');return;}refreshVehicle();profileAtStart=structuredCloneSafe(detected);prepareObservation(profileAtStart);running=true;started=false;armed=false;runId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);tracks=[];nextTrackId=1;eventSequence=0;lastFrameTime=0;averageFrameMs=16.67;boostOnCount=0;boostOffCount=0;boostExpected='boostOn';history.length=0;feedbackLog.length=0;segmentResults.length=0;detectionAlerts.length=0;for(const key of Object.keys(detectionHealth))detectionHealth[key]=0;analysisSamples=[];analysisAccel=[];analysisEvents=[];analysisLastTime=0;analysisLastSpeed=null;analysisLastSpeedTime=0;analysisMaxSpeed=null;runFinalized=false;finishSeenAt=0;finishReason=null;raceStartedAtMs=null;raceFinishedAtMs=null;telemetryRejects=0;gameClockPoll=0;gameClockLast=null;gameClockAtFinish=null;gameClockSource=null;gameClockCount=0;gameClockTrace=[];wheelLockAtFinish=null;wheelLockObservations=[];for(const k of Object.keys(stats))stats[k]=0;for(const k of Object.keys(universalStats))universalStats[k]=0;lastFeedback='-';lastDetected='-';lastFeedbackText='';feedbackEmpty=true;connectFeedbackObserver();brake(true);setMessage('출발 신호 대기 중');const lights=[...doc.querySelectorAll('.lights i')];startTimer=setInterval(()=>{if(!running)return;const active=lights.filter(el=>{const rgb=doc.defaultView.getComputedStyle(el).backgroundColor.match(/\d+/g)?.map(Number);return rgb&&rgb[0]>110&&rgb[0]>rgb[1]*1.35&&rgb[0]>rgb[2]*1.35;}).length;if(active===5)armed=true;if(armed&&active===0){clearInterval(startTimer);startTimer=null;brake(false);raceStartedAtMs=performance.now();started=true;setMessage('자동 출발 성공');}},10);raf=requestAnimationFrame(drive);/* Keep panel state independent from driving. */}
 function structuredCloneSafe(o){return JSON.parse(JSON.stringify(o||{}));}
 const ui=document.createElement('div');ui.id='dopamine-auto-v336-ui';ui.style.cssText='position:fixed;left:0;top:0;width:0;height:0;z-index:2147483647;font:12px system-ui,sans-serif;color:white;pointer-events:none';
@@ -775,5 +849,5 @@ function render(){const cs=$('#chain-status');if(cs)cs.textContent='연속: '+(c
 function setMessage(m){lastMessage=m;render();}
 function onResize(){placeUI();}function onPageHide(){if(chainEnabled)stopChain('페이지 이동으로 중지');else stop(false);}function destroy(){if(destroyed)return;destroyed=true;clearInterval(lobbyInfoTimer);if(chainEnabled)stopChain('스크립트 교체로 중지');else stop(false);window.removeEventListener('resize',onResize);window.removeEventListener('pagehide',onPageHide);ui.remove();if(window[INSTANCE]?.destroy===destroy)delete window[INSTANCE];if(window.__duMode&&window.__duAuto)delete window.__duAuto;}
 const lobbyInfoTimer=setInterval(refreshLobbyInfo,1500);
-window.addEventListener('resize',onResize);window.addEventListener('pagehide',onPageHide);window[INSTANCE]={destroy};const priorTimingRun=readSavedRuns().slice(-1)[0];if(priorTimingRun?.gameTiming)lastSavedTiming={...priorTimingRun.gameTiming,clientElapsedSec:priorTimingRun.observedRaceDurationSec??null,complete:priorTimingRun.complete};if(window.__duMode){window.__duAuto={state:()=>({version:VERSION,running,chainEnabled,chainRuns,chainMaxRuns,chainState,chainCounts,lastMessage,courseName,stats:{...stats},stopAfterCurrent,learningMode:'confidence-gated',learningProfileKey:observeState?.identity||null,lastRaceTiming:lastSavedTiming,currentGameHudSec:gameClockLast})};}loadProfile();updateInputs();restorePosition();detectCourse();refreshVehicle();refreshLobbyInfo();collapsePanel();render();
+window.addEventListener('resize',onResize);window.addEventListener('pagehide',onPageHide);window[INSTANCE]={destroy};const priorTimingRun=readSavedRuns().slice(-1)[0];if(priorTimingRun?.gameTiming)lastSavedTiming={...priorTimingRun.gameTiming,clientElapsedSec:priorTimingRun.observedRaceDurationSec??null,complete:priorTimingRun.complete};if(window.__duMode){window.__duAuto={state:()=>({version:VERSION,running,chainEnabled,chainRuns,chainMaxRuns,chainState,chainCounts,lastMessage,courseName,stats:{...stats},stopAfterCurrent,learningMode:'confidence-gated',learningProfileKey:observeState?.identity||null,lastRaceTiming:lastSavedTiming,currentGameHudSec:gameClockLast,lastRunPersistence:{...lastRunPersistence},localRunCount:readSavedRuns().length})};}loadProfile();updateInputs();restorePosition();detectCourse();refreshVehicle();refreshLobbyInfo();collapsePanel();render();
 })();
