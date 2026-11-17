@@ -1,6 +1,6 @@
 // Dopamine Unified UI runtime — loaded from pinned GitHub commit by the stable bootstrap.
 // This file is not a userscript. The bootstrap provides page window and GM upload functions.
-// UI revision: display GOOD/BAD/MISS explicitly while preserving the frozen GitHub bootstrap.
+// UI revision: stable viewport position across finish modal and race-to-lobby resizing; uploader and frozen bootstrap unchanged.
 (function () {
 'use strict';
 if(window.__dopamineUnifiedControl?.active)return;
@@ -112,7 +112,13 @@ function settings(){const list=q('#du-settings');list.replaceChildren();const pl
 function analysis(){press('analysis-refresh');q('#du-report-body').textContent=autoUi()?.querySelector('#analysis-summary')?.textContent||'저장된 주행 기록이 없습니다.';}
 function toggle(name){view=name;if(view==='tools')settings();if(view==='report')analysis();render();position();}
 function say(m){notice=m;render();}
-function relocate(){const dialogs=[...document.querySelectorAll('dialog[open]')].filter(d=>d.getClientRects().length&&d.matches(':modal'));const target=dialogs[dialogs.length-1]||document.body;if(box.parentElement!==target)target.appendChild(box);}
+function relocate(){
+ // The game presents its finish screen as a top-layer modal dialog.
+ // Keep controls visible in that top layer, but compensate for the dialog's own coordinate space.
+ const dialogs=[...document.querySelectorAll('dialog[open]')].filter(d=>d.getClientRects().length&&d.matches(':modal'));
+ const target=dialogs[dialogs.length-1]||document.body;
+ if(box.parentElement!==target){target.appendChild(box);position();}
+}
 function render(){
  const a=getA(),f=getF(),active=!!(a.running||a.chainEnabled),busy=!!f.busy;
  const tm=a.lastRaceTiming,lap=tm?.recordedLapTimeSec;
@@ -176,12 +182,29 @@ q('#du-cloud-config').onclick=()=>cloudUploader.configure();
 q('#du-cloud-retry').onclick=()=>cloudUploader.retry();
 const posKey='dopamine-unified-position-v1';let x=Math.max(8,innerWidth-224),y=Math.max(8,innerHeight-265);
 try{const p=JSON.parse(localStorage.getItem(posKey)||'null');if(Number.isFinite(p?.x)&&Number.isFinite(p?.y)){x=p.x;y=p.y;}}catch(_){}
-function position(){const w=q('.panel').offsetWidth||208,h=q('.panel').offsetHeight||220;x=Math.max(8,Math.min(x,Math.max(8,innerWidth-w-8)));y=Math.max(8,Math.min(y,Math.max(8,innerHeight-h-8)));box.style.cssText='position:fixed;left:'+x+'px;top:'+y+'px;z-index:2147483647;pointer-events:auto;max-width:calc(100vw - 16px);';}
+// The user's preferred coordinates must not be overwritten as the race panel grows/shrinks.
+// Only the visible coordinates are clamped. The panel scrolls internally at the same top edge.
+let placedX=x,placedY=y;
+function position(){
+ const panel=q('.panel'),vw=innerWidth,vh=innerHeight;
+ const w=panel.offsetWidth||208;
+ placedX=Math.max(8,Math.min(x,Math.max(8,vw-w-8)));
+ placedY=Math.max(8,Math.min(y,Math.max(8,vh-54)));
+ panel.style.maxHeight=Math.max(54,vh-placedY-8)+'px';
+ // A modal dialog may establish a transformed containing block for fixed descendants.
+ // Measure the viewport origin of left:0/top:0 after reparenting and convert coordinates.
+ box.style.cssText='position:fixed;left:0px;top:0px;z-index:2147483647;pointer-events:auto;width:max-content;max-width:calc(100vw - 16px);';
+ const origin=box.getBoundingClientRect();
+ const sx=box.offsetWidth>0&&origin.width>0?origin.width/box.offsetWidth:1;
+ const sy=box.offsetHeight>0&&origin.height>0?origin.height/box.offsetHeight:1;
+ box.style.left=((placedX-origin.left)/sx)+'px';
+ box.style.top=((placedY-origin.top)/sy)+'px';
+}
 for(const ev of ['pointerdown','pointermove','pointerup','pointercancel','click','mousedown','mouseup','touchstart','touchend'])box.addEventListener(ev,e=>e.stopPropagation(),{passive:true});
 for(const h of [q('.head')]){
-h.addEventListener('pointerdown',e=>{if(getA().running||e.target.closest('button'))return;drag={id:e.pointerId,cx:e.clientX,cy:e.clientY,x,y};moved=false;h.setPointerCapture?.(e.pointerId);});
+h.addEventListener('pointerdown',e=>{if(getA().running||e.target.closest('button'))return;drag={id:e.pointerId,cx:e.clientX,cy:e.clientY,x:placedX,y:placedY};moved=false;h.setPointerCapture?.(e.pointerId);});
 h.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;let dx=e.clientX-drag.cx,dy=e.clientY-drag.cy;if(Math.abs(dx)+Math.abs(dy)>5)moved=true;if(!moved)return;x=drag.x+dx;y=drag.y+dy;position();});
-h.addEventListener('pointerup',e=>{if(!drag||e.pointerId!==drag.id)return;if(moved)try{localStorage.setItem(posKey,JSON.stringify({x,y}));}catch(_){}drag=null;});
+h.addEventListener('pointerup',e=>{if(!drag||e.pointerId!==drag.id)return;if(moved){x=placedX;y=placedY;try{localStorage.setItem(posKey,JSON.stringify({x,y}));}catch(_){}}drag=null;});
 h.addEventListener('pointercancel',()=>{drag=null;});
 }
 window.addEventListener('resize',position);
