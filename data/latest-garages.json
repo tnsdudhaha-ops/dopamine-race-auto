@@ -1,14 +1,14 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-17T01:05:32.306Z",
+  "generatedAt": "2026-11-17T03:41:14.032Z",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-16T05:11:51.373Z",
-      "modelCount": 10,
-      "vehicleCount": 11,
+      "updatedAt": "2026-11-17T03:41:05.576Z",
+      "modelCount": 11,
+      "vehicleCount": 12,
       "vehicles": [
         {
           "grade": "SSR",
@@ -41,6 +41,13 @@
         {
           "grade": "S",
           "model": "제네시스 G70",
+          "maxStars": 2,
+          "quantity": 1,
+          "starBreakdown": []
+        },
+        {
+          "grade": "S",
+          "model": "토요타 GR86",
           "maxStars": 2,
           "quantity": 1,
           "starBreakdown": []
