@@ -1,6 +1,6 @@
 // Dopamine Unified UI runtime — loaded from pinned GitHub commit by the stable bootstrap.
 // This file is not a userscript. The bootstrap provides page window and GM upload functions.
-// UI revision: IndexedDB recovery, upload diagnostics, and complete record backup; fixed bootstrap unchanged.
+// UI revision: add cross-refresh recording lifecycle audit and correct legacy UTC timestamps in KST diagnostics; no driving changes.
 (function () {
 'use strict';
 if(window.__dopamineUnifiedControl?.active)return;
@@ -133,6 +133,40 @@ const cloudUploader=(()=>{
 })();
 const fieldNames=[['brakeY','브레이크 판정선 Y'],['boostY','부스터 판정선 Y'],['brakeOffset','브레이크 보정 px'],['boostOffset','부스터 보정 px'],['predictionMs','예측 시간 ms'],['boostZones','부스터 구간 수'],['colorTolerance','색상 허용 오차'],['tolerance','판정 허용 오차']];
 let view='race',notice='',drag=null,moved=false,diagnosticSnapshot='';
+const RECORDER_AUDIT_KEY='dopamine-uploader:recorder-audit-v1';
+const readRecorderAudit=()=>{
+ try{const data=JSON.parse(GM_getValue(RECORDER_AUDIT_KEY,'[]'));return Array.isArray(data)?data.slice(-60):[];}
+ catch(_){return [];}
+};
+let auditPrevious=null;
+function observeRecorderState(auto){
+ // This is observation only: never click or trigger game controls here.
+ let phase=null;
+ try{phase=document.querySelector('iframe[title="타임어택"]')?.contentDocument?.querySelector('#pedallap')?.dataset?.phase||null;}catch(_){}
+ const state={
+   autoRunning:!!auto.running,
+   chainEnabled:!!auto.chainEnabled,
+   phase,
+   saveStatus:auto.lastRunPersistence?.status||'none',
+   saveRunId:auto.lastRunPersistence?.runId||null,
+   localRunCount:Number.isInteger(auto.localRunCount)?auto.localRunCount:null
+ };
+ const prior=auditPrevious;
+ auditPrevious=state;
+ if(!prior)return; // first observation establishes the baseline after page load
+ const changed=Object.keys(state).filter(k=>state[k]!==prior[k]);
+ if(!changed.length)return;
+ // GM storage is separate from game-origin localStorage; it remains writable
+ // when the legacy race-results array exhausts its localStorage quota.
+ try{
+   const history=readRecorderAudit();
+   history.push({
+     timeKst:new Date(Date.now()+9*3600000).toISOString().replace('Z','+09:00'),
+     changed, ...state
+   });
+   GM_setValue(RECORDER_AUDIT_KEY,JSON.stringify(history.slice(-60)));
+ }catch(e){console.warn('[Dopamine Unified] Recorder audit store unavailable:',String(e));}
+}
 function settings(){const list=q('#du-settings');list.replaceChildren();const pl=document.createElement('label'),pi=document.createElement('input');pl.textContent='학습 프로필 (선택)';pi.type='text';pi.dataset.profile='yes';pi.value=autoUi()?.querySelector('#vehicleProfile')?.value??'';pl.appendChild(pi);list.appendChild(pl);for(const [id,title] of fieldNames){const label=document.createElement('label'),input=document.createElement('input');label.textContent=title;input.type='number';input.dataset.field=id;input.value=autoUi()?.querySelector('#'+id)?.value??'';label.appendChild(input);list.appendChild(label);}}
 function analysis(){press('analysis-refresh');q('#du-report-body').textContent=autoUi()?.querySelector('#analysis-summary')?.textContent||'저장된 주행 기록이 없습니다.';}
 function toggle(name){view=name;if(view==='tools')settings();if(view==='report')analysis();render();position();}
@@ -146,6 +180,7 @@ function relocate(){
 }
 function render(){
  const a=getA(),f=getF(),active=!!(a.running||a.chainEnabled),busy=!!f.busy;
+ observeRecorderState(a);
  const tm=a.lastRaceTiming,lap=tm?.recordedLapTimeSec;
  const gameLap=tm?.complete?(Number.isFinite(lap)?lap:(Number.isFinite(tm.resultTimeSec)?tm.resultTimeSec:tm.hudAtFinishSec)):null;
  const lastTime=Number.isFinite(gameLap)?gameLap.toFixed(3)+'초':'미확인';
@@ -244,7 +279,12 @@ q('#du-cloud-diagnostic').onclick=async()=>{
       sentMarkers:sent.size,localCount:status.localCount,localPending:status.localPending,
       archiveFallback:status.archiveFallback,
       recoverableRuns:runs.length,
-      latestRuns:runs.slice(-8).map(r=>({runId:r.runId,timeKst:r.timeKst||r.time,complete:r.complete,events:r.events,markedSent:sent.has(r.runId)}))
+      latestRuns:runs.slice(-8).map(r=>{
+        const timestamp=Date.parse(r.time||'');
+        const corrected=Number.isFinite(timestamp)?new Date(timestamp+9*3600000).toISOString().replace('Z','+09:00'):null;
+        return {runId:r.runId,timeKst:corrected||r.timeKst||null,complete:r.complete,events:r.events,markedSent:sent.has(r.runId)};
+      }),
+      recentRecorderActivity:readRecorderAudit().slice(-15)
     };
     const content=JSON.stringify(diagnostic,null,2);
     diagnosticSnapshot=content;
