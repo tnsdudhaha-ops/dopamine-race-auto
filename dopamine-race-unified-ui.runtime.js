@@ -132,7 +132,7 @@ const cloudUploader=(()=>{
   return {configure,retry:()=>{retryAfter=0;uploadPending(true);},state,acknowledgedIds:sentIds,destroy:()=>{disposed=true;clearInterval(timer);}};
 })();
 const fieldNames=[['brakeY','브레이크 판정선 Y'],['boostY','부스터 판정선 Y'],['brakeOffset','브레이크 보정 px'],['boostOffset','부스터 보정 px'],['predictionMs','예측 시간 ms'],['boostZones','부스터 구간 수'],['colorTolerance','색상 허용 오차'],['tolerance','판정 허용 오차']];
-let view='race',notice='',drag=null,moved=false;
+let view='race',notice='',drag=null,moved=false,diagnosticSnapshot='';
 function settings(){const list=q('#du-settings');list.replaceChildren();const pl=document.createElement('label'),pi=document.createElement('input');pl.textContent='학습 프로필 (선택)';pi.type='text';pi.dataset.profile='yes';pi.value=autoUi()?.querySelector('#vehicleProfile')?.value??'';pl.appendChild(pi);list.appendChild(pl);for(const [id,title] of fieldNames){const label=document.createElement('label'),input=document.createElement('input');label.textContent=title;input.type='number';input.dataset.field=id;input.value=autoUi()?.querySelector('#'+id)?.value??'';label.appendChild(input);list.appendChild(label);}}
 function analysis(){press('analysis-refresh');q('#du-report-body').textContent=autoUi()?.querySelector('#analysis-summary')?.textContent||'저장된 주행 기록이 없습니다.';}
 function toggle(name){view=name;if(view==='tools')settings();if(view==='report')analysis();render();position();}
@@ -170,7 +170,7 @@ function render(){
  q('#du-cloud-state').textContent=cloud;
  q('#du-cloud-state').title=cloud;
  const diagnostics=q('#du-diagnostics');
- if(diagnostics)diagnostics.textContent='AUTO: '+(a.lastMessage||'대기')+'\n트랙: '+(a.courseName||'미확인')+
+ if(diagnostics)diagnostics.textContent=diagnosticSnapshot||'AUTO: '+(a.lastMessage||'대기')+'\n트랙: '+(a.courseName||'미확인')+
    '\n차고: '+(f.message||'대기')+'\n게임 최근 완주: '+(tm?.complete?(tm.recordedLapTimeSource==='game-explicit-result'?'최종 확인 ':'HUD 관측 ')+lastTime:'없음')+
    '\n'+cloud;
  relocate();
@@ -247,6 +247,7 @@ q('#du-cloud-diagnostic').onclick=async()=>{
       latestRuns:runs.slice(-8).map(r=>({runId:r.runId,timeKst:r.timeKst||r.time,complete:r.complete,events:r.events,markedSent:sent.has(r.runId)}))
     };
     const content=JSON.stringify(diagnostic,null,2);
+    diagnosticSnapshot=content;
     q('#du-diagnostics').textContent=content;
     try{await navigator.clipboard.writeText(content);say('기록·전송 진단 복사 완료 (인증키 제외)');}
     catch(_){say('진단 정보 표시됨 · ⚙ 화면 아래 확인');}
