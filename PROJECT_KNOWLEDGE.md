@@ -731,3 +731,9 @@
 - **[개발 수정 완료]** `dopamine-fleet-tracker.runtime.js` 차량 분석기 개발 **v1.0.1** (기존 Release 명칭은 변경하지 않음), GitHub 커밋 `fa96577d328afa8ba8365db8277f843470daa199`. 전체 수량 검증까지 성공한 차고 조회는 보유 변화가 없어도 `db.garages[user].updatedAt`을 실제 스캔시각(UTC)으로 갱신하고 저장; 변경 없으면 변동 스냅샷·변동 이벤트는 추가하지 않음. GitHub로 보내는 새 JSON에 원본 `generatedAt`/`updatedAt`(UTC `Z`) 보존과 함께 `generatedAtKst`/`updatedAtKst`(정확히 같은 시각 `+09:00`)/`timeZone:'Asia/Seoul'`을 추가. 업로드 성공 안내에도 KST 기준 생성시각 표시.
 - **[로컬 단위 테스트]** 변경 없는 차고 조회가 `updatedAt`만 갱신하고 변동 스냅샷을 만들지 않는지, 실제 변경 시 기존 스냅샷을 유지하는지, `generatedAtKst`/`updatedAtKst` 환산이 올바른지 검증 통과. **실제 게임 페이지에서의 수집·업로드 성공, 새 GitHub JSON 갱신은 아직 확인되지 않음.** 과거 파일의 `generatedAt`이나 참가자 `updatedAt`을 오늘 시각으로 덮어쓰지 않음.
 - **[후속 확인]** 게임 페이지 새로고침 → 통합 스크립트에서 최신 차량 분석기 v1.0.1 로딩 → 차고 갱신 실행 → `GitHub 자동 업로드 성공` 확인 후 원본 `generatedAtKst`과 참가자 `updatedAtKst` 재조회. 업로드가 실패하면 자동 다운로드된 JSON을 백업 자료로 유지; 토큰/키는 사용자에게 공유 요청하거나 공개 저장소에 기록하지 않음.
+
+
+### 2026-11-18 12:02 KST · 실제 차고 새 JSON 수신 및 시간대 구분
+- **[최신 확인]** GitHub `data/latest-garages.json`이 조사 도중 새로 변경됨(조회 당시 SHA `ed3ba925f0c2e7d00604b45081d77b21dffc8dca`). `generatedAt=2026-11-18T03:02:43.682Z` = **2026-11-18 12:02:43 KST**, **전체 65대**; ㅇ발 13대 (11종), updatedAt=2026-11-18 12:00:48 KST; 구레긔 15대 (15종), updatedAt=2026-11-18 12:00:50 KST; 피콜로 11대 (11종), updatedAt=2026-11-18 12:00:52 KST; ㅇ샘 11대 (11종), updatedAt=2026-11-17 10:05:28 KST; 영감 6대 (6종), updatedAt=2026-11-17 17:30:22 KST; 톩끼 9대 (9종), updatedAt=2026-11-18 12:00:55 KST.
+- **[중요 해석]** 새 업로드 JSON의 `trackerVersion=1.0`, `generatedAtKst`/`updatedAtKst` 미포함이므로 **수정 이전의 차량 분석기 v1.0이 만든 자료**로 보인다. ㅇ샘·영감의 `updatedAt`이 전날인 것은 실제 미조회 확정이 아니며, v1.0의 '변동 없으면 조회시각 미갱신' 코드 결함과 양립한다. 기존 UTC `Z` 시각을 KST로 환산한 값은 정확함.
+- **[개발 상태]** GitHub 차량 분석기 런타임 v1.0.1의 수정은 반영되었으나 새 실게임 파일을 해당 버전으로 생성해 본 검증은 아직 없다. 새로고침 후 6명 전체 재조회/업로드 시 UTC 원본+KST 별도 필드와 변경 없음 상태에서도 마지막 성공 조회시각이 함께 기록되도록 설계됨. 지난날 기록을 오늘로 임의 변경하지 않음.
