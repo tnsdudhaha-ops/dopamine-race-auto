@@ -1,7 +1,7 @@
 // Dopamine Fleet Tracker runtime — Vehicle Analyzer Release 1.0 (bootstrap compatibility marker)
 (function () {
   'use strict';
-  const VERSION = '1.0.1';
+  const VERSION = '1.0.2';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -12,6 +12,8 @@
   db.settings = Object.assign({auto:true},db.settings || {});
   let selected = 'ㅇ발';
   let message = '차고 팝업을 열고 참가자를 선택해 저장하세요.';
+  let lastRefresh={status:'idle',stage:'idle',message:null,results:[]};
+  let lastCaptureFailure=null;
   let collapsed = true;
   const root = document.createElement('div');
   root.id = 'dft-root';
@@ -174,11 +176,13 @@
     return possible.sort((a,b) => (b.scrollHeight-b.clientHeight)-(a.scrollHeight-a.clientHeight))[0] || null;
   }
   async function captureGarage(silent=false, ownerOverride=null) {
-    if (collecting) return;
-    const p = activeGaragePanel();
-    const actual = ownerOverride || currentGarageOwner();
-    if (!p) { if (!silent) note('차고 팝업을 찾지 못했습니다.'); return; }
-    if (!actual) { if (!silent) note('현재 차고 소유주를 확인하지 못했습니다. 이전 선택값으로 저장하지 않습니다.'); return; }
+    lastCaptureFailure=null;
+    if(collecting){lastCaptureFailure='이미 수집 중';return false;}
+    const p=activeGaragePanel(),observedOwner=currentGarageOwner(),actual=ownerOverride||observedOwner;
+    if(!p){lastCaptureFailure='차고 팝업 인식 실패';return false;}
+    if(!actual||(ownerOverride&&observedOwner!==ownerOverride)){
+      lastCaptureFailure='소유주 불일치: 요청 '+ownerOverride+', 화면 '+observedOwner;return false;
+    }
     if (actual !== selected) { selected=actual; render(); }
     collecting = true;
     const scroll = scrollContainer(p);
@@ -212,11 +216,10 @@
       const total=cars.reduce((n,v)=>n+v.qty,0);
       const expected=expectedTotal(p);
       if (!complete || !p.isConnected) {
-        if (!silent) note('스크롤 끝까지 확인하지 못해 저장하지 않았습니다. 수집 '+cars.length+'종');
-        return;
+        lastCaptureFailure='스크롤 완료 실패 '+cars.length+'종';if(!silent)note(lastCaptureFailure);return false;
       }
-      if (!cars.length) {if (!silent) note('차량 카드 0건 인식. 화면 구조 확인이 필요합니다.');return;}
-      if (expected!==null && total!==expected) {if (!silent) note('수량 불일치: 게임 '+expected+'대 / 추적 '+total+'대. 기존 기록 보호를 위해 저장하지 않았습니다.');return;}
+      if (!cars.length) {lastCaptureFailure='차량 카드 0건 인식';if(!silent)note(lastCaptureFailure);return false;}
+      if (expected!==null && total!==expected) {lastCaptureFailure='수량 불일치: 게임 '+expected+'대 / 인식 '+total+'대';if(!silent)note(lastCaptureFailure);return false;}
       const prev = db.garages[actual]?.vehicles || [];
       const changes = differences(prev,cars);
       const at = date();
@@ -238,7 +241,7 @@
       if (!silent) note(actual+' 전체 수집 '+cars.length+'종 / '+total+'대 저장, 변경 '+changes.length+'건');
       return true;
     } catch(e) {
-      if (!silent) note('차고 수집 오류: '+String(e.message || e));
+      lastCaptureFailure='차고 수집 오류: '+String(e?.message||e);if(!silent)note(lastCaptureFailure);return false;
     } finally {
       if (scroll && scroll.isConnected) scroll.scrollTop = oldTop;
       collecting = false;
@@ -277,7 +280,7 @@
     const start=Date.now();
     while(Date.now()-start<timeout){
       const p=activeGaragePanel();
-      if(p&&p.getClientRects().length&&(currentGarageOwner()===owner||/보유\s*차량/.test(p.innerText||'')))return p;
+      if(p&&p.getClientRects().length&&currentGarageOwner()===owner)return p;
       await pause(150);
     }
     return null;
@@ -321,84 +324,111 @@
     try{link.click();}finally{link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
     return link.download;
   }
+
+  // Use the Tampermonkey cross-origin transport; keep credentials browser-local.
+  function ghRequest(method,token,body=null){
+    const headers={'Accept':'application/vnd.github+json','Authorization':'Bearer '+token,'X-GitHub-Api-Version':'2022-11-28'};
+    if(body!==null)headers['Content-Type']='application/json';
+    const parse=(status,raw)=>{let data=null;try{data=JSON.parse(raw||'null');}catch(_){}return {status,data};};
+    if(typeof GM_xmlhttpRequest==='function')return new Promise((resolve,reject)=>{
+      try{GM_xmlhttpRequest({method,url:GH_FILE_API,headers,...(body===null?{}:{data:body}),timeout:20000,
+        onload:r=>resolve(parse(r.status,r.responseText)),
+        onerror:()=>reject(new Error('GitHub 네트워크/권한 연결 실패')),
+        ontimeout:()=>reject(new Error('GitHub 접속 시간 초과'))});}
+      catch(e){reject(new Error('GitHub 요청 실패: '+String(e?.message||e)));}
+    });
+    return fetch(GH_FILE_API,{method,headers,...(body===null?{}:{body}),cache:'no-store'}).then(async r=>parse(r.status,await r.text()));
+  }
   async function uploadAiGarageJson(payload,token){
-    const headers={'Accept':'application/vnd.github+json','Authorization':'Bearer '+token,
-      'X-GitHub-Api-Version':'2022-11-28'};
-    const current=await fetch(GH_FILE_API,{headers,cache:'no-store'});
-    if(current.status!==200&&current.status!==404)
-      throw new Error('기존 파일 조회 HTTP '+current.status+(current.status===401?' (토큰 인증 실패)':''));
-    const sha=current.status===200?(await current.json()).sha:null;
-    const body={message:'Update latest garages '+payload.generatedAt,
-      content:base64Utf8(JSON.stringify(payload,null,2)),branch:'main'};
+    const prior=await ghRequest('GET',token);
+    if(prior.status!==200&&prior.status!==404)throw new Error('GitHub 기존 원본 HTTP '+prior.status+' · '+String(prior.data?.message||''));
+    const sha=prior.status===200?prior.data?.sha:null;
+    if(prior.status===200&&!sha)throw new Error('기존 원본 SHA 확인 실패');
+    const body={message:'Update latest garages '+payload.generatedAt,content:base64Utf8(JSON.stringify(payload,null,2)),branch:'main'};
     if(sha)body.sha=sha;
-    const response=await fetch(GH_FILE_API,{method:'PUT',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(body)});
-    if(!response.ok){
-      const detail=await response.json().catch(()=>({}));
-      throw new Error('업로드 HTTP '+response.status+(detail.message?' · '+detail.message:''));
-    }
+    const saved=await ghRequest('PUT',token,JSON.stringify(body));
+    if(saved.status!==200&&saved.status!==201)throw new Error('GitHub 업로드 HTTP '+saved.status+' · '+String(saved.data?.message||''));
+    if(!saved.data?.content?.sha)throw new Error('GitHub 저장 응답 검증 실패');
     return true;
   }
+
+  function ensureGhToken(){
+    if(localStorage.getItem(GH_TOKEN_KEY))return true;
+    // Prompt before the first await: mobile browsers can reject a delayed prompt.
+    const input=(window.prompt('GitHub 차고 업로드 토큰을 이 브라우저에 입력하세요 (Contents 읽기/쓰기). 채팅에 공유하지 마세요.')||'').trim();
+    if(!input)return false;
+    localStorage.setItem(GH_TOKEN_KEY,input);return true;
+  }
   async function publishAiGarageJson(){
-    const payload=aiGaragePayload();
-    let token=localStorage.getItem(GH_TOKEN_KEY)||'';
-    if(!token){
-      const entered=window.prompt('GitHub Fine-grained PAT를 입력하세요 (저장소 Contents 읽기/쓰기 권한). 토큰은 이 브라우저에만 저장되며 GitHub 코드/JSON에는 포함되지 않습니다.');
-      if(!entered){
-        downloadAiGarageJson(payload);
-        note('GitHub 토큰 미등록 · JSON 파일로 대신 저장했습니다. 다음 갱신 때 다시 입력할 수 있습니다.');
-        return;
-      }
-      token=entered.trim();
-      if(!token){note('토큰이 비어 있어 업로드하지 않았습니다.');return;}
-      localStorage.setItem(GH_TOKEN_KEY,token);
-    }
+    const payload=aiGaragePayload(),token=localStorage.getItem(GH_TOKEN_KEY)||'';
+    if(!token){note('GitHub 인증 토큰 없음');return false;}
     note('6/6명 수집 완료 · GitHub 업로드 중…');
     try{
       await uploadAiGarageJson(payload,token);
-      note('GitHub 자동 업로드 성공 · 조회기준 '+toKst(payload.generatedAt)+' · data/latest-garages.json · 이제 ChatGPT에 "차고 갱신했어"라고 말씀하세요.');
+      note('GitHub 자동 업로드 성공 · '+toKst(payload.generatedAt)+' · 총 '+payload.participants.reduce((n,p)=>n+p.vehicleCount,0)+'대');
+      return true;
     }catch(e){
-      downloadAiGarageJson(payload);
-      if(/401|403/.test(String(e.message||e))){
-        localStorage.removeItem(GH_TOKEN_KEY);
-        note('GitHub 인증/권한 오류: '+String(e.message||e)+' · 토큰 저장을 해제했습니다. JSON은 백업 다운로드했습니다.');
-      }else note('GitHub 업로드 실패: '+String(e.message||e)+' · JSON은 백업 다운로드했습니다.');
+      const err=String(e?.message||e);
+      if(/HTTP 401/.test(err))localStorage.removeItem(GH_TOKEN_KEY);
+      try{downloadAiGarageJson(payload);}catch(_){}
+      note('GitHub 업로드 실패: '+err+' · 로컬 백업 확인');
+      return false;
     }
   }
-  async function refreshAllGarages() {
-    if(fleetRefreshing||collecting)return;
-    const initial=participantRows();
-    if(initial.length!==6||initial.some(x=>!x.owner)||new Set(initial.map(x=>x.owner)).size!==6){
-      note('참가자 인식 '+initial.filter(x=>x.owner).length+'/'+initial.length+'명 ('+initial.map(x=>x.owner||'?').join(', ')+'). 상점 → 참가자 현황을 확인하세요.');
-      return;
+
+  function rowsReady(rows){return rows.length===6&&rows.every(x=>x.owner)&&new Set(rows.map(x=>x.owner)).size===6;}
+  function navButton(re){
+    return [...document.querySelectorAll('button,[role="button"],[role="tab"],a')]
+      .find(el=>el.getClientRects().length&&!el.disabled&&clean(el.innerText||el.textContent).length<36&&re.test(clean(el.innerText||el.textContent)))||null;
+  }
+  async function awaitRows(ms=3200){
+    const start=Date.now();
+    while(Date.now()-start<ms){const r=participantRows();if(rowsReady(r))return r;await pause(180);}
+    return participantRows();
+  }
+  async function findRows(){
+    let rows=participantRows();if(rowsReady(rows))return rows;
+    const garage=activeGaragePanel();
+    if(garage&&closeGarage(garage)){note('열린 차고 닫는 중…');await pause(250);rows=participantRows();if(rowsReady(rows))return rows;}
+    let tab=navButton(/참가자\s*현황/);
+    if(tab){note('참가자 현황으로 이동 중…');tab.click();rows=await awaitRows();if(rowsReady(rows))return rows;}
+    const shop=navButton(/(?:^|\s)상점\s*$/);
+    if(shop){note('상점 화면 이동 중…');shop.click();await pause(400);tab=navButton(/참가자\s*현황/);
+      if(tab){tab.click();rows=await awaitRows();if(rowsReady(rows))return rows;}
+      rows=await awaitRows(1000);
     }
-    fleetRefreshing=true;
-    const results=[];
-    let successes=0;
+    return rows;
+  }
+  function done(status,stage,msg,results){
+    lastRefresh={status,ok:status==='success',stage,message:msg,timeKst:toKst(date()),results:results||[]};
+    note(msg);return lastRefresh;
+  }
+  async function refreshAllGarages() {
+    if(fleetRefreshing||collecting)return {ok:false,stage:'busy',message:'이미 수집 중'};
+    if(!ensureGhToken())return done('failed','auth','GitHub 업로드 토큰이 없어 갱신하지 않았습니다');
+    fleetRefreshing=true;lastRefresh={status:'running',stage:'navigate',message:'차고 갱신 시작',results:[]};
+    const results=[];let successes=0;
     try{
+      const initial=await findRows();
+      if(!rowsReady(initial))return done('failed','navigation','참가자 인식 실패 '+initial.filter(x=>x.owner).length+'/6 · 상점 → 참가자 현황 화면 확인',results);
       for(let i=0;i<initial.length;i++){
-        const {owner}=initial[i];
-        note('전체 차고 갱신 '+(i+1)+'/6: '+owner+' 차고 여는 중');
+        const owner=initial[i].owner;note('차고 수집 '+(i+1)+'/6 · '+owner);
         const row=participantRows().find(x=>x.owner===owner);
-        if(!row||!row.button.isConnected){results.push(owner+' 행 없음');continue;}
-        row.button.click();
-        const p=await waitForGarage(owner);
-        if(!p){results.push(owner+' 열기 실패');continue;}
-        await pause(250);
-        const ok=await captureGarage(true,owner);
+        if(!row||!row.button.isConnected){results.push({owner,ok:false,reason:'행 없음'});continue;}
+        row.button.click();const p=await waitForGarage(owner);
+        if(!p){results.push({owner,ok:false,reason:'차고 팝업/소유주 확인 실패'});continue;}
+        await pause(250);const ok=await captureGarage(true,owner);
         const garage=db.garages[owner];
-        const qty=(garage?.vehicles||[]).reduce((n,v)=>n+(Number(v.qty)||0),0);
-        const expected=expectedTotal(p);
-        if(ok)successes++;
-        results.push(owner+(ok?' '+garage.vehicles.length+'종/'+qty+'대 (게임 '+(expected===null?'미확인':expected)+'대)':' 저장 실패 (게임 '+(expected===null?'미확인':expected)+'대)'));
-        if(!closeGarage(p)){note(owner+' 차고 닫기 실패. 자동 갱신 중단');break;}
+        const reason=ok?garage.vehicles.length+'종/'+garage.vehicles.reduce((n,v)=>n+v.qty,0)+'대':(lastCaptureFailure||'차량 수집 실패');
+        results.push({owner,ok:!!ok,reason});if(ok)successes++;
+        note((i+1)+'/6 '+owner+' '+(ok?'저장':'실패')+' · '+reason);
+        if(!closeGarage(p)){results.push({owner,ok:false,reason:'차고 닫기 실패'});break;}
         await pause(350);
       }
-      if(successes===6){
-        await publishAiGarageJson();
-      }else{
-        note('전체 차고 갱신: '+successes+'/6명 성공 · JSON 자동 생성 보류. '+results.join(' / '));
-      }
-    }catch(e){note('전체 갱신 오류: '+String(e.message||e));}
+      if(successes!==6)return done('failed','scanning','차고 갱신 실패 '+successes+'/6 · '+results.filter(r=>!r.ok).map(r=>r.owner+': '+r.reason).join(' / ')+' · 원본 업로드 보류',results);
+      const uploaded=await publishAiGarageJson();
+      return done(uploaded?'success':'failed','upload',message,results);
+    }catch(e){return done('failed','exception','차고 갱신 예외: '+String(e?.message||e),results);}
     finally{fleetRefreshing=false;}
   }
   function tradeScreen() {
@@ -581,7 +611,7 @@
       status.includes('전체 차고 갱신')?status.match(/전체 차고 갱신 \d+\/6[^:]*/)?.[0]||'차고 수집 중…':
       status.includes('오류')||status.includes('실패')||status.includes('보류')||status.includes('미등록')?status:'';
     shadow.innerHTML='<style>:host{all:initial}*{box-sizing:border-box}.wrap{font:12px system-ui,sans-serif;color:#f4f6fa;background:#172334;border:1px solid #71859b;border-radius:9px;box-shadow:0 3px 15px #0008;padding:6px;max-width:230px}button{width:100%;background:#395471;color:#fff;border:1px solid #9aafc4;border-radius:6px;padding:8px 10px;cursor:pointer;font-weight:700;font-size:12px}button:disabled{opacity:.65;cursor:wait}.status{font-size:10px;line-height:1.35;color:#d7e0ee;margin-top:4px;overflow-wrap:anywhere;max-height:62px;overflow:auto}</style>'+
-      '<div class="wrap"><button id="fleet" '+(busy?'disabled':'')+'>🚗 차량 분석기 1.0 · '+(busy?'갱신 중…':'차량 갱신')+'</button>'+
+      '<div class="wrap"><button id="fleet" '+(busy?'disabled':'')+'>🚗 차량 분석기 '+VERSION+' · '+(busy?'갱신 중…':'차량 갱신')+'</button>'+
       (shortStatus?'<div class="status" title="'+escapeHtml(status)+'">'+escapeHtml(shortStatus)+'</div>':'')+'</div>';
     shadow.getElementById('fleet').onclick=refreshAllGarages;
   }
@@ -601,7 +631,7 @@
     root.style.setProperty('opacity','1','important');
     root.style.setProperty('display','block','important');
   }
-  if(window.__duMode)window.__duFleet={refresh:refreshAllGarages,exportJson,captureTrades,state:()=>({busy:fleetRefreshing||collecting,message,users:Object.keys(db.garages||{}).length,version:VERSION})};
+  if(window.__duMode)window.__duFleet={refresh:refreshAllGarages,exportJson,captureTrades,state:()=>({busy:fleetRefreshing||collecting,message,users:Object.keys(db.garages||{}).length,version:VERSION,lastRefresh})};
   function init() {
     document.body.appendChild(root);
     relocateOverlay();
