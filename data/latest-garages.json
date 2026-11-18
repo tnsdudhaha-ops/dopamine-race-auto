@@ -1,14 +1,14 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-17T08:30:23.925Z",
+  "generatedAt": "2026-11-18T03:02:43.682Z",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-17T03:41:05.576Z",
+      "updatedAt": "2026-11-18T03:00:48.928Z",
       "modelCount": 11,
-      "vehicleCount": 12,
+      "vehicleCount": 13,
       "vehicles": [
         {
           "grade": "SSR",
@@ -84,7 +84,7 @@
           "grade": "R",
           "model": "대우 티코",
           "maxStars": 2,
-          "quantity": 2,
+          "quantity": 3,
           "starBreakdown": [
             {
               "stars": 2,
@@ -92,7 +92,7 @@
             },
             {
               "stars": 1,
-              "qty": 1
+              "qty": 2
             }
           ]
         }
@@ -100,10 +100,17 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-17T08:30:18.081Z",
-      "modelCount": 12,
-      "vehicleCount": 12,
+      "updatedAt": "2026-11-18T03:00:50.636Z",
+      "modelCount": 15,
+      "vehicleCount": 15,
       "vehicles": [
+        {
+          "grade": "SSR",
+          "model": "아우디 R8",
+          "maxStars": 2,
+          "quantity": 1,
+          "starBreakdown": []
+        },
         {
           "grade": "SSR",
           "model": "페라리 458 이탈리아",
@@ -112,15 +119,15 @@
           "starBreakdown": []
         },
         {
-          "grade": "SSR",
-          "model": "페라리 루체",
+          "grade": "SR",
+          "model": "테슬라 사이버트럭",
           "maxStars": 1,
           "quantity": 1,
           "starBreakdown": []
         },
         {
           "grade": "SR",
-          "model": "테슬라 사이버트럭",
+          "model": "토요타 수프라",
           "maxStars": 1,
           "quantity": 1,
           "starBreakdown": []
@@ -143,6 +150,13 @@
           "grade": "S",
           "model": "토요타 GR86",
           "maxStars": 3,
+          "quantity": 1,
+          "starBreakdown": []
+        },
+        {
+          "grade": "S",
+          "model": "현대 싼타페",
+          "maxStars": 1,
           "quantity": 1,
           "starBreakdown": []
         },
@@ -187,12 +201,19 @@
           "maxStars": 4,
           "quantity": 1,
           "starBreakdown": []
+        },
+        {
+          "grade": "R",
+          "model": "현대 캐스퍼",
+          "maxStars": 2,
+          "quantity": 1,
+          "starBreakdown": []
         }
       ]
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-16T22:14:48.672Z",
+      "updatedAt": "2026-11-18T03:00:52.267Z",
       "modelCount": 11,
       "vehicleCount": 11,
       "vehicles": [
@@ -261,7 +282,7 @@
         },
         {
           "grade": "R",
-          "model": "대우 티코",
+          "model": "기아 레이 EV",
           "maxStars": 2,
           "quantity": 1,
           "starBreakdown": []
@@ -412,9 +433,9 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-17T08:30:23.567Z",
+      "updatedAt": "2026-11-18T03:00:55.921Z",
       "modelCount": 9,
-      "vehicleCount": 10,
+      "vehicleCount": 9,
       "vehicles": [
         {
           "grade": "SR",
@@ -454,18 +475,9 @@
         {
           "grade": "R",
           "model": "두산 굴삭기",
-          "maxStars": 3,
-          "quantity": 2,
-          "starBreakdown": [
-            {
-              "stars": 3,
-              "qty": 1
-            },
-            {
-              "stars": 2,
-              "qty": 1
-            }
-          ]
+          "maxStars": 4,
+          "quantity": 1,
+          "starBreakdown": []
         },
         {
           "grade": "R",
