@@ -1,7 +1,7 @@
 // Dopamine Fleet Tracker runtime — Vehicle Analyzer Release 1.0 (bootstrap compatibility marker)
 (function () {
   'use strict';
-  const VERSION = '1.0';
+  const VERSION = '1.0.1';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -19,6 +19,7 @@
   const clean = s => String(s || '').replace(/\s+/g,' ').trim();
   const who = s => ALIASES[clean(s)] || clean(s);
   const date = () => new Date().toISOString();
+  const toKst = utc => { const ms=Date.parse(utc||'');return Number.isFinite(ms)?new Date(ms+9*60*60*1000).toISOString().replace('Z','+09:00'):null; };
   const save = () => localStorage.setItem(KEY,JSON.stringify(db));
   const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g,c => {
     if (c === '&') return '&amp;';
@@ -218,8 +219,15 @@
       if (expected!==null && total!==expected) {if (!silent) note('수량 불일치: 게임 '+expected+'대 / 추적 '+total+'대. 기존 기록 보호를 위해 저장하지 않았습니다.');return;}
       const prev = db.garages[actual]?.vehicles || [];
       const changes = differences(prev,cars);
-      if (prev.length && !changes.length) {if (!silent) note(actual+' 차고 변경 없음 ('+cars.length+'종 / '+total+'대)');return true;}
       const at = date();
+      if (prev.length && !changes.length) {
+        // A successful scan counts as a new scan even when ownership is unchanged.
+        // Keep change snapshots/events unchanged; update only last-confirmed scan time.
+        db.garages[actual] = {...db.garages[actual],updatedAt:at,source:'full-popup-scroll'};
+        save();
+        if (!silent) note(actual+' 차고 변경 없음 ('+cars.length+'종 / '+total+'대) · 조회 '+toKst(at));
+        return true;
+      }
       db.garages[actual] = {vehicles:cars,updatedAt:at,source:'full-popup-scroll'};
       db.snapshots.push({user:actual,at,vehicles:cars,changes});
       if (prev.length && changes.length) db.events.push({user:actual,at,changes,note:'변동 원인 미확정'});
@@ -285,7 +293,7 @@
   const GH_FILE_API='https://api.github.com/repos/tnsdudhaha-ops/dopamine-race-auto/contents/data/latest-garages.json';
   function aiGaragePayload(){
     const generatedAt=date();
-    return {schema:'dopamine-race-garages-ai-v1',generatedAt,
+    return {schema:'dopamine-race-garages-ai-v1',generatedAt,generatedAtKst:toKst(generatedAt),timeZone:'Asia/Seoul',
       source:'도파민레이스 차량 추적기',trackerVersion:VERSION,
       participants:USERS.map(user=>{
         const g=db.garages[user];
@@ -293,7 +301,7 @@
           grade:v.grade,model:v.model,maxStars:Number(v.stars),
           quantity:Number(v.qty),starBreakdown:Array.isArray(v.breakdown)?v.breakdown:[]
         }));
-        return {user,updatedAt:g?.updatedAt||null,modelCount:vehicles.length,
+        return {user,updatedAt:g?.updatedAt||null,updatedAtKst:toKst(g?.updatedAt),modelCount:vehicles.length,
           vehicleCount:vehicles.reduce((n,v)=>n+v.quantity,0),vehicles};
       })};
   }
@@ -347,7 +355,7 @@
     note('6/6명 수집 완료 · GitHub 업로드 중…');
     try{
       await uploadAiGarageJson(payload,token);
-      note('GitHub 자동 업로드 성공 · data/latest-garages.json · 이제 ChatGPT에 "차고 갱신했어"라고 말씀하세요.');
+      note('GitHub 자동 업로드 성공 · 조회기준 '+toKst(payload.generatedAt)+' · data/latest-garages.json · 이제 ChatGPT에 "차고 갱신했어"라고 말씀하세요.');
     }catch(e){
       downloadAiGarageJson(payload);
       if(/401|403/.test(String(e.message||e))){
