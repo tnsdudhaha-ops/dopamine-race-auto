@@ -82,7 +82,7 @@ function trySparseBoostCoast(track,now){
   recordDetectionAlert('sparse-boost-coast-trigger',track,now,{eventKey:candidate.eventKey,...candidate.meta});
   return true;
 }
-const AUTO_TUNE={minSamples:3,minRuns:3,minDirectional:3,directionalFraction:.75,maxPx:2.2,frameFraction:.5,speedTolerancePxMs:.018,speedToleranceFraction:.08,directionalSpeedTolerancePxMs:.015,qualityFrames:4,qualityGapMs:55,coastMaxGapMs:51,coastMaxOvershootPx:3.55};
+const AUTO_TUNE={minSamples:3,minRuns:3,minDirectional:3,directionalFraction:.75,maxPx:2.2,frameFraction:.5,speedTolerancePxMs:.018,speedToleranceFraction:.08,directionalSpeedTolerancePxMs:.015,qualityFrames:4,qualityGapMs:55,coastMaxGapMs:51,coastMaxOvershootPx:3.55,perfectSafetyMarginPx:.5};
 const SETTINGS_PREFIX='dopamine-auto-v32:',POSITION_KEY='dopamine-auto:position-v328',LEARNING_PREFIX='dopamine-auto-v335:learning:',PROFILE_KEY='dopamine-auto-v335:profile';
 const ANALYSIS_KEY='dopamine-auto-v336:runs', MAX_RUNS=120, MAX_SAMPLES=4000;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), round=(v,n=3)=>Number((Number(v)||0).toFixed(n)), nowMs=()=>performance.now();
@@ -272,6 +272,18 @@ function observeFeedback(record,parsed){
   observeRunCount++;
   if(parsed.grade==='great')observeRunGreat++;
 }
+function safeNoRegressionAdvancePx(record){
+  // Counterfactual only: approximate how much earlier the previous visible
+  // observation would have fired, holding the original predictive term fixed.
+  // Never turn a previously PERFECT visible event into an earlier frame solely
+  // to repair LATE grades elsewhere.
+  if(!record||record.feedbackGrade!=='perfect'||record.triggerSource!=='visible')return null;
+  const frames=record.frameTrace?.before||[],prev=frames[frames.length-2];
+  if(!prev||!Number.isFinite(prev.y)||!Number.isFinite(record.adaptivePredictionPx)||!Number.isFinite(record.triggerLineY))return null;
+  const previouslyApplied=(record.appliedCorrection||0)+(record.autoCorrectionPx||0);
+  if(Math.abs(previouslyApplied)>.05)return null; // bound from uncorrected PERFECT only
+  return Math.max(0,round(record.triggerLineY-prev.y-record.adaptivePredictionPx-AUTO_TUNE.perfectSafetyMarginPx,3));
+}
 // Reconstruct the last runs' graded quality evidence from ORIGINAL local JSON.
 // This upgrades old observation-only traces after code updates without inventing
 // grades or modifying the source records. Called once on race start, never per frame.
@@ -290,7 +302,7 @@ function restoreRecentTireEvidence(runs){
         runId:old.runId,grade:record.feedbackGrade,
         direction:record.feedbackDirection||null,speed:record.speed,
         triggerSource:record.triggerSource,appliedPx:record.autoCorrectionPx||0,
-        measuredDistanceM:record.feedbackDistanceM
+        safeAdvancePx:safeNoRegressionAdvancePx(record),measuredDistanceM:record.feedbackDistanceM
       });
     }
   }
@@ -325,7 +337,7 @@ function commitCompletedObservations(){
       if(!recent.some(x=>x.runId===runId))
         recent.push({runId,grade:parsed.grade,direction:parsed.direction||null,
           speed:record.speed,triggerSource:record.triggerSource,appliedPx:record.autoCorrectionPx||0,
-          measuredDistanceM:parsed.distanceM});
+          safeAdvancePx:safeNoRegressionAdvancePx(record),measuredDistanceM:parsed.distanceM});
       entry.qualityRecent=recent.slice(-16);
     }
     observeState.events[key]=entry;
@@ -367,7 +379,15 @@ function autoLeadPreview(eventKey,speed){
     return {...basis,reason:'tire-event-speed-mismatch'};
   // Up to half a *measured* frame of marker motion: controlled subframe
   // adaptation, NOT a change to the frozen predict() / ENGINE.
-  const px=round(clamp(speed*averageFrameMs*AUTO_TUNE.frameFraction,0,AUTO_TUNE.maxPx),3);
+  const proposedPx=clamp(speed*averageFrameMs*AUTO_TUNE.frameFraction,0,AUTO_TUNE.maxPx);
+  // Existing clean PERFECT results act as a per-event, per-tire regression bound.
+  // Do not advance their preceding visible frame in the static proxy.
+  const perfectLimit=matches.filter(x=>x.grade==='perfect'&&!((x.appliedPx||0)>.05)
+    &&Math.abs(x.speed-speed)<=AUTO_TUNE.directionalSpeedTolerancePxMs
+    &&Number.isFinite(x.safeAdvancePx))
+    .reduce((min,x)=>Math.min(min,x.safeAdvancePx),Infinity);
+  const px=round(clamp(Math.min(proposedPx,perfectLimit),0,AUTO_TUNE.maxPx),3);
+  if(px<.15)return {...basis,reason:'perfect-regression-bound'};
   return {...basis,px,reason:relevant===late?'tire-event-speed-verified-late':'tire-event-corrected-perfect-hold'};
 }
 
