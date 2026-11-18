@@ -21,6 +21,7 @@ box.innerHTML='<style>'+
 '#du-integrated #du-status{font-size:10px;color:#e9f3ff;max-height:34px;overflow:hidden}'+
 '#du-integrated #du-race-status{max-height:65px;overflow:hidden;line-height:1.35}'+
 '#du-integrated #du-cloud-state{max-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;color:#9eb5cb}'+
+'#du-integrated #du-garage-status{font-size:10px;max-height:70px;overflow-y:auto;color:#c5deee}'+
 '#du-integrated .run-config{display:flex;align-items:center;gap:5px;margin-bottom:5px;white-space:nowrap;font-size:10px;color:#cad9ec}'+
 '#du-integrated .run-config input{width:45px;min-width:45px;padding:4px 3px;text-align:center}'+
 '#du-integrated .run-config small{font-size:9px;color:#97b0c9}'+
@@ -32,9 +33,9 @@ box.innerHTML='<style>'+
 '</style>'+
 '<div class="panel"><div class="head"><strong>🏎 AUTO</strong><div class="head-actions"><button id="du-auto">주행</button><button id="du-analyze">📊</button><button id="du-tools">⚙</button></div></div>'+
 '<div class="status" id="du-status">초기화 중…</div>'+
-'<div class="section" id="du-race"><label class="run-config">연속 <input id="du-run-limit" type="number" min="0" max="18" step="1" value="0" inputmode="numeric">판 <small>(0=타이어 모두)</small></label><div class="grid race-buttons"><button id="du-one">▶ 1판</button><button id="du-chain">🔁 연속</button><button id="du-stop" style="background:#a5313e">■ 중지</button><button id="du-garage">🚗 차고 갱신</button></div><div class="status" id="du-race-status"></div></div>'+
+'<div class="section" id="du-race"><label class="run-config">연속 <input id="du-run-limit" type="number" min="0" max="18" step="1" value="0" inputmode="numeric">판 <small>(0=타이어 모두)</small></label><div class="grid race-buttons"><button id="du-one">▶ 1판</button><button id="du-chain">🔁 연속</button><button id="du-stop" style="background:#a5313e">■ 중지</button><button id="du-garage">🚗 차고 갱신</button></div><div class="status" id="du-race-status"></div><div class="status" id="du-garage-status" hidden></div></div>'+
 '<div class="status" id="du-cloud-state">☁ Google Sheets 확인 중…</div>'+
-'<div class="section" id="du-advanced" hidden><div class="grid"><button id="du-log">📋 입력 기록 복사</button><button id="du-copy-analysis">📋 누적 분석 복사</button><button id="du-json">💾 전체 기록 백업</button><button id="du-detect">🔍 차량 다시 읽기</button><button id="du-defaults">↩ 설정 초기화</button><button id="du-export">📥 차고 백업</button><button id="du-trades">🧾 거래 기록 수집</button><button id="du-force">⛔ 긴급 즉시 중지</button><button id="du-cloud-config">☁ 시트 연결 설정</button><button id="du-cloud-retry">☁ 미전송 기록 전송</button><button id="du-cloud-diagnostic">🧪 기록·전송 진단</button></div><div class="settings" id="du-settings"></div><div class="status" id="du-diagnostics"></div><button style="width:100%;margin-top:6px" id="du-save">⚙ AUTO 설정 저장</button></div>'+
+'<div class="section" id="du-advanced" hidden><div class="grid"><button id="du-log">📋 입력 기록 복사</button><button id="du-copy-analysis">📋 누적 분석 복사</button><button id="du-json">💾 전체 기록 백업</button><button id="du-detect">🔍 차량 다시 읽기</button><button id="du-defaults">↩ 설정 초기화</button><button id="du-export">📥 차고 백업</button><button id="du-trades">🧾 거래 기록 수집</button><button id="du-force">⛔ 긴급 즉시 중지</button><button id="du-cloud-config">☁ 시트 연결 설정</button><button id="du-cloud-retry">☁ 미전송 기록 전송</button><button id="du-cloud-diagnostic">🧪 기록·전송 진단</button><button id="du-garage-diagnostic">📋 차고 갱신 진단 복사</button></div><div class="settings" id="du-settings"></div><div class="status" id="du-diagnostics"></div><button style="width:100%;margin-top:6px" id="du-save">⚙ AUTO 설정 저장</button></div>'+
 '<div class="section" id="du-report" hidden><div class="report" id="du-report-body"></div><button style="width:100%;margin-top:6px" id="du-report-close">주행 화면으로</button></div></div>';
 document.body.appendChild(box);
 const q=s=>box.querySelector(s),autoUi=()=>document.getElementById('dopamine-auto-v336-ui');
@@ -132,7 +133,7 @@ const cloudUploader=(()=>{
   return {configure,retry:()=>{retryAfter=0;uploadPending(true);},state,acknowledgedIds:sentIds,destroy:()=>{disposed=true;clearInterval(timer);}};
 })();
 const fieldNames=[['brakeY','브레이크 판정선 Y'],['boostY','부스터 판정선 Y'],['brakeOffset','브레이크 보정 px'],['boostOffset','부스터 보정 px'],['predictionMs','예측 시간 ms'],['boostZones','부스터 구간 수'],['colorTolerance','색상 허용 오차'],['tolerance','판정 허용 오차']];
-let view='race',notice='',drag=null,moved=false,diagnosticSnapshot='';
+let view='race',notice='',drag=null,moved=false,diagnosticSnapshot='',garageRequested=false;
 const RECORDER_AUDIT_KEY='dopamine-uploader:recorder-audit-v1';
 const readRecorderAudit=()=>{
  try{const data=JSON.parse(GM_getValue(RECORDER_AUDIT_KEY,'[]'));return Array.isArray(data)?data.slice(-60):[];}
@@ -196,6 +197,10 @@ function render(){
  q('#du-stop').textContent=a.stopAfterCurrent?'⏳ 중지 예약':'■ 다음 판 전 중지';
  q('#du-race').hidden=view!=='race';q('#du-advanced').hidden=view!=='tools';q('#du-report').hidden=view!=='report';
  q('#du-status').textContent=status+' · AUTO v'+(a.version||'?')+(a.lastRunPersistence?.status==='failed'?'\n⛔ 기록 저장 실패 · ⚙ 전체 기록 백업':a.lastRunPersistence?.status==='archive-pending'?'\n⚠ 주행 원본 별도 보관 중':'')+(notice?'\n'+notice:'');
+ const garageStatus=q('#du-garage-status');
+ garageStatus.hidden=!garageRequested||active;
+ garageStatus.textContent=garageRequested?(f.message||'차고 갱신 상태 확인 중…'):'';
+ garageStatus.title=f.message||'';
  q('#du-race-status').textContent=(mode?'연속 '+mode+' · ':'')+tire+
    '\nP '+(a.stats?.perfect||0)+' / G '+(a.stats?.great||0)+' / GOOD '+(a.stats?.good||0)+' / BAD '+(a.stats?.bad||0)+' / MISS '+(a.stats?.miss||0)+
    '\n랩 '+currentHud+' · 지난 완주 '+lastTime+
@@ -226,7 +231,8 @@ q('#du-stop').onclick=()=>{
  if(!press('stop-btn'))return say('AUTO 중지 버튼 연결 실패');
  say('다음 주행 시작 전 AUTO 중지 요청 완료');
 };
-q('#du-garage').onclick=async()=>{if(getA().running||getA().chainEnabled)return say('주행 중 차고 갱신 불가');const fleet=window.__duFleet;if(!fleet)return say('차고 분석기 실행 오류');notice='';render();try{await fleet.refresh();}catch(e){say('갱신 오류: '+String(e?.message||e));}render();};
+q('#du-garage').onclick=async()=>{if(getA().running||getA().chainEnabled)return say('주행 중 차고 갱신 불가');const fleet=window.__duFleet;if(!fleet)return say('차고 분석기 실행 오류');garageRequested=true;notice='';render();try{const result=await fleet.refresh();if(result?.ok===false)notice='차고 갱신 실패 · 상세 사유는 아래 표시';}catch(e){say('갱신 오류: '+String(e?.message||e));}render();};
+q('#du-garage-diagnostic').onclick=async()=>{const f=getF();const snapshot={checkedAtKst:new Date(Date.now()+9*3600000).toISOString().replace('Z','+09:00'),fleetVersion:f.version,garageMessage:f.message,refresh:f.lastRefresh};try{await navigator.clipboard.writeText(JSON.stringify(snapshot,null,2));say('차고 갱신 진단 복사 완료');}catch(e){say('차고 진단 복사 실패: '+String(e?.message||e));}};
 q('#du-analyze').onclick=()=>toggle('report');q('#du-report-close').onclick=()=>toggle('race');
 q('#du-log').onclick=()=>{press('copy-btn');say('입력 기록 복사 실행');};
 async function allSavedRuns(){
