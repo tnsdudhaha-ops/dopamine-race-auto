@@ -82,7 +82,7 @@ function trySparseBoostCoast(track,now){
   recordDetectionAlert('sparse-boost-coast-trigger',track,now,{eventKey:candidate.eventKey,...candidate.meta});
   return true;
 }
-const AUTO_TUNE={minSamples:4,minRuns:4,minDirectional:3,directionalFraction:.60,maxPx:2.2,frameFraction:.5,speedTolerancePxMs:.025,speedToleranceFraction:.12,directionalSpeedTolerancePxMs:.018,qualityFrames:4,qualityGapMs:55,coastMaxGapMs:51,coastMaxOvershootPx:3.55};
+const AUTO_TUNE={minSamples:3,minRuns:3,minDirectional:3,directionalFraction:.75,maxPx:2.2,frameFraction:.5,speedTolerancePxMs:.018,speedToleranceFraction:.08,directionalSpeedTolerancePxMs:.015,qualityFrames:4,qualityGapMs:55,coastMaxGapMs:51,coastMaxOvershootPx:3.55};
 const SETTINGS_PREFIX='dopamine-auto-v32:',POSITION_KEY='dopamine-auto:position-v328',LEARNING_PREFIX='dopamine-auto-v335:learning:',PROFILE_KEY='dopamine-auto-v335:profile';
 const ANALYSIS_KEY='dopamine-auto-v336:runs', MAX_RUNS=120, MAX_SAMPLES=4000;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), round=(v,n=3)=>Number((Number(v)||0).toFixed(n)), nowMs=()=>performance.now();
