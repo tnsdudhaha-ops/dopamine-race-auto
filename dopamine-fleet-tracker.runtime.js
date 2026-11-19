@@ -1,7 +1,7 @@
 // Dopamine Fleet Tracker runtime — Vehicle Analyzer Release 1.0 (bootstrap compatibility marker)
 (function () {
   'use strict';
-  const VERSION = '1.0.2';
+  const VERSION = '1.0.3';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -14,6 +14,7 @@
   let message = '차고 팝업을 열고 참가자를 선택해 저장하세요.';
   let lastRefresh={status:'idle',stage:'idle',message:null,results:[]};
   let lastCaptureFailure=null;
+  let pendingQuotaSave=false;
   let collapsed = true;
   const root = document.createElement('div');
   root.id = 'dft-root';
@@ -23,6 +24,16 @@
   const date = () => new Date().toISOString();
   const toKst = utc => { const ms=Date.parse(utc||'');return Number.isFinite(ms)?new Date(ms+9*60*60*1000).toISOString().replace('Z','+09:00'):null; };
   const save = () => localStorage.setItem(KEY,JSON.stringify(db));
+  function saveGarageOrDefer(){
+    try{save();pendingQuotaSave=false;return true;}
+    catch(e){
+      if(e?.name==='QuotaExceededError'||/quota|storage full|저장.*초과/i.test(String(e?.message||e))){
+        pendingQuotaSave=true; // preserve current scan in memory; do not delete unsent history
+        return false;
+      }
+      throw e;
+    }
+  }
   const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g,c => {
     if (c === '&') return '&amp;';
     if (c === '<') return '&lt;';
@@ -227,7 +238,7 @@
         // A successful scan counts as a new scan even when ownership is unchanged.
         // Keep change snapshots/events unchanged; update only last-confirmed scan time.
         db.garages[actual] = {...db.garages[actual],updatedAt:at,source:'full-popup-scroll'};
-        save();
+        saveGarageOrDefer();
         if (!silent) note(actual+' 차고 변경 없음 ('+cars.length+'종 / '+total+'대) · 조회 '+toKst(at));
         return true;
       }
@@ -236,7 +247,7 @@
       if (prev.length && changes.length) db.events.push({user:actual,at,changes,note:'변동 원인 미확정'});
       db.snapshots = db.snapshots.slice(-800);
       db.events = db.events.slice(-800);
-      save();
+      saveGarageOrDefer();
       selected = actual;
       if (!silent) note(actual+' 전체 수집 '+cars.length+'종 / '+total+'대 저장, 변경 '+changes.length+'건');
       return true;
@@ -365,7 +376,7 @@
     note('6/6명 수집 완료 · GitHub 업로드 중…');
     try{
       await uploadAiGarageJson(payload,token);
-      note('GitHub 자동 업로드 성공 · '+toKst(payload.generatedAt)+' · 총 '+payload.participants.reduce((n,p)=>n+p.vehicleCount,0)+'대');
+      note('GitHub 자동 업로드 성공 · '+toKst(payload.generatedAt)+' · 총 '+payload.participants.reduce((n,p)=>n+p.vehicleCount,0)+'대'+(pendingQuotaSave?' · ⚠ 로컬 저장공간 초과: GitHub 업로드 완료, 브라우저 저장 보류':''));
       return true;
     }catch(e){
       const err=String(e?.message||e);
@@ -406,6 +417,7 @@
   async function refreshAllGarages() {
     if(fleetRefreshing||collecting)return {ok:false,stage:'busy',message:'이미 수집 중'};
     if(!ensureGhToken())return done('failed','auth','GitHub 업로드 토큰이 없어 갱신하지 않았습니다');
+    pendingQuotaSave=false;
     fleetRefreshing=true;lastRefresh={status:'running',stage:'navigate',message:'차고 갱신 시작',results:[]};
     const results=[];let successes=0;
     try{
@@ -631,7 +643,7 @@
     root.style.setProperty('opacity','1','important');
     root.style.setProperty('display','block','important');
   }
-  if(window.__duMode)window.__duFleet={refresh:refreshAllGarages,exportJson,captureTrades,state:()=>({busy:fleetRefreshing||collecting,message,users:Object.keys(db.garages||{}).length,version:VERSION,lastRefresh})};
+  if(window.__duMode)window.__duFleet={refresh:refreshAllGarages,exportJson,captureTrades,state:()=>({busy:fleetRefreshing||collecting,message,users:Object.keys(db.garages||{}).length,version:VERSION,lastRefresh,pendingQuotaSave})};
   function init() {
     document.body.appendChild(root);
     relocateOverlay();
