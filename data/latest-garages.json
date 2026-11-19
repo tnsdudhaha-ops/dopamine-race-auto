@@ -1,15 +1,15 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-19T02:06:40.467Z",
-  "generatedAtKst": "2026-11-19T11:06:40.467+09:00",
+  "generatedAt": "2026-11-19T07:52:23.310Z",
+  "generatedAtKst": "2026-11-19T16:52:23.310+09:00",
   "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0.3",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-19T02:06:32.792Z",
-      "updatedAtKst": "2026-11-19T11:06:32.792+09:00",
+      "updatedAt": "2026-11-19T07:52:15.709Z",
+      "updatedAtKst": "2026-11-19T16:52:15.709+09:00",
       "modelCount": 12,
       "vehicleCount": 15,
       "vehicles": [
@@ -119,8 +119,8 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-19T02:06:34.365Z",
-      "updatedAtKst": "2026-11-19T11:06:34.365+09:00",
+      "updatedAt": "2026-11-19T07:52:17.287Z",
+      "updatedAtKst": "2026-11-19T16:52:17.287+09:00",
       "modelCount": 16,
       "vehicleCount": 16,
       "vehicles": [
@@ -240,8 +240,8 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-19T02:06:35.761Z",
-      "updatedAtKst": "2026-11-19T11:06:35.761+09:00",
+      "updatedAt": "2026-11-19T07:52:18.666Z",
+      "updatedAtKst": "2026-11-19T16:52:18.666+09:00",
       "modelCount": 13,
       "vehicleCount": 13,
       "vehicles": [
@@ -340,11 +340,18 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-19T02:06:37.249Z",
-      "updatedAtKst": "2026-11-19T11:06:37.249+09:00",
-      "modelCount": 13,
-      "vehicleCount": 13,
+      "updatedAt": "2026-11-19T07:52:20.115Z",
+      "updatedAtKst": "2026-11-19T16:52:20.115+09:00",
+      "modelCount": 14,
+      "vehicleCount": 14,
       "vehicles": [
+        {
+          "grade": "SSR",
+          "model": "페라리 458 이탈리아",
+          "maxStars": 1,
+          "quantity": 1,
+          "starBreakdown": []
+        },
         {
           "grade": "SR",
           "model": "아우디 RS6 아반트",
@@ -440,8 +447,8 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-19T02:06:38.639Z",
-      "updatedAtKst": "2026-11-19T11:06:38.639+09:00",
+      "updatedAt": "2026-11-19T07:52:21.514Z",
+      "updatedAtKst": "2026-11-19T16:52:21.514+09:00",
       "modelCount": 7,
       "vehicleCount": 7,
       "vehicles": [
@@ -498,8 +505,8 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-19T02:06:40.112Z",
-      "updatedAtKst": "2026-11-19T11:06:40.112+09:00",
+      "updatedAt": "2026-11-19T07:52:22.956Z",
+      "updatedAtKst": "2026-11-19T16:52:22.956+09:00",
       "modelCount": 8,
       "vehicleCount": 8,
       "vehicles": [
