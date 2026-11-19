@@ -1,12 +1,15 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-18T03:02:43.682Z",
+  "generatedAt": "2026-11-19T00:07:09.774Z",
+  "generatedAtKst": "2026-11-19T09:07:09.774+09:00",
+  "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
-  "trackerVersion": "1.0",
+  "trackerVersion": "1.0.3",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-18T03:00:48.928Z",
+      "updatedAt": "2026-11-19T00:07:01.709Z",
+      "updatedAtKst": "2026-11-19T09:07:01.709+09:00",
       "modelCount": 11,
       "vehicleCount": 13,
       "vehicles": [
@@ -100,7 +103,8 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-18T03:00:50.636Z",
+      "updatedAt": "2026-11-19T00:07:03.606Z",
+      "updatedAtKst": "2026-11-19T09:07:03.606+09:00",
       "modelCount": 15,
       "vehicleCount": 15,
       "vehicles": [
@@ -213,9 +217,10 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-18T03:00:52.267Z",
-      "modelCount": 11,
-      "vehicleCount": 11,
+      "updatedAt": "2026-11-19T00:07:05.184Z",
+      "updatedAtKst": "2026-11-19T09:07:05.184+09:00",
+      "modelCount": 13,
+      "vehicleCount": 13,
       "vehicles": [
         {
           "grade": "SSR",
@@ -234,6 +239,20 @@
         {
           "grade": "SR",
           "model": "아우디 RS6 아반트",
+          "maxStars": 1,
+          "quantity": 1,
+          "starBreakdown": []
+        },
+        {
+          "grade": "SR",
+          "model": "테슬라 사이버트럭",
+          "maxStars": 3,
+          "quantity": 1,
+          "starBreakdown": []
+        },
+        {
+          "grade": "SR",
+          "model": "BMW M3",
           "maxStars": 1,
           "quantity": 1,
           "starBreakdown": []
@@ -298,10 +317,18 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-17T01:05:28.796Z",
-      "modelCount": 11,
-      "vehicleCount": 11,
+      "updatedAt": "2026-11-19T00:07:06.680Z",
+      "updatedAtKst": "2026-11-19T09:07:06.680+09:00",
+      "modelCount": 13,
+      "vehicleCount": 13,
       "vehicles": [
+        {
+          "grade": "SR",
+          "model": "아우디 RS6 아반트",
+          "maxStars": 1,
+          "quantity": 1,
+          "starBreakdown": []
+        },
         {
           "grade": "SR",
           "model": "테슬라 사이버트럭",
@@ -313,6 +340,13 @@
           "grade": "SR",
           "model": "포르쉐 718",
           "maxStars": 3,
+          "quantity": 1,
+          "starBreakdown": []
+        },
+        {
+          "grade": "SR",
+          "model": "BMW M3",
+          "maxStars": 1,
           "quantity": 1,
           "starBreakdown": []
         },
@@ -383,14 +417,22 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-17T08:30:22.207Z",
-      "modelCount": 6,
-      "vehicleCount": 6,
+      "updatedAt": "2026-11-19T00:07:08.046Z",
+      "updatedAtKst": "2026-11-19T09:07:08.046+09:00",
+      "modelCount": 7,
+      "vehicleCount": 7,
       "vehicles": [
         {
           "grade": "SSR",
           "model": "포르쉐 911",
           "maxStars": 1,
+          "quantity": 1,
+          "starBreakdown": []
+        },
+        {
+          "grade": "SR",
+          "model": "캐터필러 불도저",
+          "maxStars": 3,
           "quantity": 1,
           "starBreakdown": []
         },
@@ -433,10 +475,18 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-18T03:00:55.921Z",
-      "modelCount": 9,
-      "vehicleCount": 9,
+      "updatedAt": "2026-11-19T00:07:09.419Z",
+      "updatedAtKst": "2026-11-19T09:07:09.419+09:00",
+      "modelCount": 8,
+      "vehicleCount": 8,
       "vehicles": [
+        {
+          "grade": "SSR",
+          "model": "포르쉐 911",
+          "maxStars": 1,
+          "quantity": 1,
+          "starBreakdown": []
+        },
         {
           "grade": "SR",
           "model": "캐터필러 불도저",
@@ -446,15 +496,8 @@
         },
         {
           "grade": "S",
-          "model": "제네시스 G70",
-          "maxStars": 2,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "S",
           "model": "토요타 GR86",
-          "maxStars": 4,
+          "maxStars": 5,
           "quantity": 1,
           "starBreakdown": []
         },
@@ -483,13 +526,6 @@
           "grade": "R",
           "model": "쉐보레 스파크",
           "maxStars": 5,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "R",
-          "model": "현대 캐스퍼",
-          "maxStars": 2,
           "quantity": 1,
           "starBreakdown": []
         },
