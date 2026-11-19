@@ -35,7 +35,7 @@ box.innerHTML='<style>'+
 '<div class="status" id="du-status">초기화 중…</div>'+
 '<div class="section" id="du-race"><label class="run-config">연속 <input id="du-run-limit" type="number" min="0" max="18" step="1" value="0" inputmode="numeric">판 <small>(0=타이어 모두)</small></label><div class="grid race-buttons"><button id="du-one">▶ 1판</button><button id="du-chain">🔁 연속</button><button id="du-stop" style="background:#a5313e">■ 중지</button><button id="du-garage">🚗 차고 갱신</button></div><div class="status" id="du-race-status"></div><div class="status" id="du-garage-status" hidden></div></div>'+
 '<div class="status" id="du-cloud-state">☁ Google Sheets 확인 중…</div>'+
-'<div class="section" id="du-advanced" hidden><div class="grid"><button id="du-log">📋 입력 기록 복사</button><button id="du-copy-analysis">📋 누적 분석 복사</button><button id="du-json">💾 전체 기록 백업</button><button id="du-detect">🔍 차량 다시 읽기</button><button id="du-defaults">↩ 설정 초기화</button><button id="du-export">📥 차고 백업</button><button id="du-trades">🧾 거래 기록 수집</button><button id="du-force">⛔ 긴급 즉시 중지</button><button id="du-cloud-config">☁ 시트 연결 설정</button><button id="du-cloud-retry">☁ 미전송 기록 전송</button><button id="du-cloud-diagnostic">🧪 기록·전송 진단</button><button id="du-garage-diagnostic">📋 차고 갱신 진단 복사</button></div><div class="settings" id="du-settings"></div><div class="status" id="du-diagnostics"></div><button style="width:100%;margin-top:6px" id="du-save">⚙ AUTO 설정 저장</button></div>'+
+'<div class="section" id="du-advanced" hidden><div class="grid"><button id="du-log">📋 입력 기록 복사</button><button id="du-copy-analysis">📋 누적 분석 복사</button><button id="du-json">💾 전체 기록 백업</button><button id="du-detect">🔍 차량 다시 읽기</button><button id="du-defaults">↩ 설정 초기화</button><button id="du-export">📥 차고 백업</button><button id="du-trades">🧾 거래 기록 수집</button><button id="du-force">⛔ 긴급 즉시 중지</button><button id="du-cloud-config">☁ 시트 연결 설정</button><button id="du-cloud-retry">☁ 미전송 기록 전송</button><button id="du-cloud-diagnostic">🧪 기록·전송 진단</button><button id="du-garage-diagnostic">📋 차고 갱신 진단 복사</button><button id="du-storage-diagnostic">📦 저장공간 진단</button><button id="du-clean-acked">🧹 서버확인 기록 정리</button></div><div class="settings" id="du-settings"></div><div class="status" id="du-diagnostics"></div><button style="width:100%;margin-top:6px" id="du-save">⚙ AUTO 설정 저장</button></div>'+
 '<div class="section" id="du-report" hidden><div class="report" id="du-report-body"></div><button style="width:100%;margin-top:6px" id="du-report-close">주행 화면으로</button></div></div>';
 document.body.appendChild(box);
 const q=s=>box.querySelector(s),autoUi=()=>document.getElementById('dopamine-auto-v336-ui');
@@ -233,6 +233,66 @@ q('#du-stop').onclick=()=>{
 };
 q('#du-garage').onclick=async()=>{if(getA().running||getA().chainEnabled)return say('주행 중 차고 갱신 불가');const fleet=window.__duFleet;if(!fleet)return say('차고 분석기 실행 오류');garageRequested=true;notice='';render();try{const result=await fleet.refresh();if(result?.ok===false)notice='차고 갱신 실패 · 상세 사유는 아래 표시';}catch(e){say('갱신 오류: '+String(e?.message||e));}render();};
 q('#du-garage-diagnostic').onclick=async()=>{const f=getF();const snapshot={checkedAtKst:new Date(Date.now()+9*3600000).toISOString().replace('Z','+09:00'),fleetVersion:f.version,garageMessage:f.message,refresh:f.lastRefresh};try{await navigator.clipboard.writeText(JSON.stringify(snapshot,null,2));say('차고 갱신 진단 복사 완료');}catch(e){say('차고 진단 복사 실패: '+String(e?.message||e));}};
+
+const STORAGE_RUNS_KEY='dopamine-auto-v336:runs',STORAGE_FLEET_KEY='dopamine-fleet-tracker-v1';
+function storageReport(){
+ const bytes=k=>{try{const v=localStorage.getItem(k);return v===null?0:new Blob([v]).size;}catch(_){return null;}};
+ const keys=[];let total=0;
+ try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);const size=bytes(k);keys.push({key:k,bytes:size});if(size!==null)total+=size;}}
+ catch(e){return {error:String(e?.message||e)};}
+ keys.sort((a,b)=>(b.bytes||0)-(a.bytes||0));
+ return {origin:location.origin,localStorageBytes:total,localStorageTopKeys:keys.slice(0,12),
+   runBytes:bytes(STORAGE_RUNS_KEY),garageBytes:bytes(STORAGE_FLEET_KEY),
+   sentIds:cloudUploader.state().sentCount,
+   note:'localStorage 용량과 IndexedDB/CacheStorage 전체 할당량은 다릅니다. navigator.storage.estimate()는 전체 origin 추정치입니다.'};
+}
+async function storageDiagnostic(){
+ const report=storageReport();
+ try{if(navigator.storage?.estimate){const x=await navigator.storage.estimate();report.originUsageBytes=x.usage;report.originQuotaBytes=x.quota;}}
+ catch(e){report.estimateError=String(e?.message||e);}
+ return report;
+}
+async function cleanupAcknowledgedRuns(){
+ if(getA().running||getA().chainEnabled||cloudUploader.state().sending||cloudUploader.state().checking){
+   return {ok:false,reason:'주행/전송 진행 중에는 정리하지 않습니다'};
+ }
+ let runs;try{runs=JSON.parse(localStorage.getItem(STORAGE_RUNS_KEY)||'[]');if(!Array.isArray(runs))throw Error('형식 오류');}
+ catch(e){return {ok:false,reason:'주행기록 파싱 오류 · 정리 취소'};}
+ let ids;try{ids=new Set(JSON.parse(GM_getValue('dopamine-uploader:sent','[]')));}
+ catch(e){return {ok:false,reason:'서버 확인 ID 목록 오류 · 정리 취소'};}
+ if(!ids.size)return {ok:false,reason:'서버 저장 확인된 주행 ID가 없어 정리하지 않았습니다'};
+ // Keep last 20 original runs for comparison/learning. Only IDs with explicit SAVED/ALREADY_SAVED acknowledgments are eligible.
+ const keepLast=20;const eligible=runs.slice(0,Math.max(0,runs.length-keepLast)).filter(r=>r?.runId&&ids.has(r.runId));
+ if(!eligible.length)return {ok:true,removed:0,reason:'정리 대상 없음 (최근 20건 또는 미확인 기록 보호)'};
+ const remove=new Set(eligible.map(r=>r.runId)),remaining=runs.filter(r=>!remove.has(r?.runId));
+ // Verify all removable originals have a second durable copy in IndexedDB before removing localStorage bytes.
+ if(!window.__duRunArchive?.all)return {ok:false,reason:'IndexedDB 보관소를 확인할 수 없어 삭제 취소'};
+ let archived;try{archived=await window.__duRunArchive.all();}
+ catch(e){return {ok:false,reason:'IndexedDB 조회 실패 · 삭제 취소: '+String(e?.message||e)};}
+ const archivedIds=new Set((archived||[]).map(r=>r?.runId).filter(Boolean));
+ if(eligible.some(r=>!archivedIds.has(r.runId)))return {ok:false,reason:'보관소에 없는 기록이 있어 삭제 취소'};
+ const previous=localStorage.getItem(STORAGE_RUNS_KEY);
+ try{
+   localStorage.setItem(STORAGE_RUNS_KEY,JSON.stringify(remaining));
+   const check=JSON.parse(localStorage.getItem(STORAGE_RUNS_KEY)||'null');
+   if(!Array.isArray(check)||check.length!==remaining.length)throw Error('쓰기 검증 실패');
+ }catch(e){
+   try{if(previous!==null)localStorage.setItem(STORAGE_RUNS_KEY,previous);}catch(_){}
+   return {ok:false,reason:'정리 기록 쓰기 실패 · '+String(e?.message||e)};
+ }
+ return {ok:true,removed:eligible.length,remaining:remaining.length,
+   reason:'서버 저장 확인 및 IndexedDB 이중 보관된 주행 '+eligible.length+'건을 localStorage에서만 정리 · 최근 20건 보호'};
+}
+q('#du-storage-diagnostic').onclick=async()=>{
+ const report=await storageDiagnostic();
+ try{await navigator.clipboard.writeText(JSON.stringify(report,null,2));say('저장공간 진단 복사 완료 · localStorage '+Math.round((report.localStorageBytes||0)/1024)+'KiB');}
+ catch(e){say('저장공간 진단 복사 실패: '+String(e?.message||e));}
+};
+q('#du-clean-acked').onclick=async()=>{
+ if(!window.confirm('서버 저장 응답과 IndexedDB 원본이 모두 확인된 오래된 주행기록만 브라우저 localStorage에서 정리합니다. 최근 20건과 미전송 기록은 유지합니다. 계속할까요?'))return;
+ const result=await cleanupAcknowledgedRuns();
+ say(result.reason);
+};
 q('#du-analyze').onclick=()=>toggle('report');q('#du-report-close').onclick=()=>toggle('race');
 q('#du-log').onclick=()=>{press('copy-btn');say('입력 기록 복사 실행');};
 async function allSavedRuns(){
