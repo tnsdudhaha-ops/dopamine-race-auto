@@ -1,6 +1,6 @@
 // Dopamine Unified UI runtime — loaded from pinned GitHub commit by the stable bootstrap.
 // This file is not a userscript. The bootstrap provides page window and GM upload functions.
-// UI revision: passive MANUAL timing/segment telemetry, independent of fixed AUTO driving and bootstrap.
+// UI revision: passive MANUAL timing/segment telemetry + guarded Firefox manual start release recovery; AUTO engine and bootstrap unchanged.
 (function () {
 'use strict';
 if(window.__dopamineUnifiedControl?.active)return;
@@ -391,7 +391,7 @@ const timer=setInterval(()=>{render();position();},750);
 // Passive MANUAL telemetry: no synthetic game input, no change to AUTO prediction.
 const manualTelemetry=(()=>{
   'use strict';
-  const VERSION='0.1.0',CHECKPOINT='dopamine-manual:checkpoint-v1';
+  const VERSION='0.1.1',CHECKPOINT='dopamine-manual:checkpoint-v1';
   const FINISH=/^(finished|finish|complete|completed|result|results|ended|end|done)$/;
   const ACTIVE=/^(running|racing|playing|active|in-progress)$/;
   const STOPPED=/^(interrupted|aborted|canceled|cancelled|failed|stopped|quit)$/;
@@ -407,6 +407,85 @@ const manualTelemetry=(()=>{
   const analysisBtn=document.createElement('button'),exportBtn=document.createElement('button');
   analysisBtn.textContent='✋ 수동 주행 분석';exportBtn.textContent='💾 수동 기록 백업';
   q('#du-advanced .grid').append(analysisBtn,exportBtn);
+  // Firefox/Android manual start assist: observe trusted input, never replace AUTO driving.
+  // A single synthetic pointerup is allowed only if a real release was observed,
+  // all five red lights were observed during that hold, and the game stayed at 0.
+  const FIREFOX_START_KEY='dopamine-manual:firefox-start-assist-v1';
+  const firefoxAndroid=/Android/i.test(navigator.userAgent||'')&&/Firefox\//i.test(navigator.userAgent||'');
+  let firefoxAssist=firefoxAndroid,firefoxHeld=null,firefoxSawFive=false,firefoxRecoveryTimer=null;
+  let firefoxRecoveryCount=0,firefoxReleaseCount=0,firefoxToken=0;
+  const firefoxEvents=[];
+  try{const option=localStorage.getItem(FIREFOX_START_KEY);if(option!==null)firefoxAssist=option==='on';}catch(_){}
+  const firefoxToggle=document.createElement('button'),firefoxDiagnostic=document.createElement('button');
+  const firefoxGrid=q('#du-advanced .grid');
+  firefoxGrid.append(firefoxToggle,firefoxDiagnostic);
+  function firefoxToggleLabel(){firefoxToggle.textContent='🛠 수동 출발 보완: '+(firefoxAssist?'ON':'OFF');}
+  firefoxToggleLabel();firefoxDiagnostic.textContent='📋 수동 출발 진단 복사';
+  function firefoxLog(kind,e=null,extra={}){
+    firefoxEvents.push({atMs:round(now(),1),kind,domEvent:e?.type||null,
+      brakeTarget:!!e?.target?.closest?.('.cursor-interaction'),phase:phase(),...extra});
+    if(firefoxEvents.length>80)firefoxEvents.shift();
+  }
+  function firefoxReset(){
+    firefoxToken++;
+    if(firefoxRecoveryTimer!==null){clearTimeout(firefoxRecoveryTimer);firefoxRecoveryTimer=null;}
+    firefoxHeld=null;firefoxSawFive=false;
+  }
+  function firefoxObserve(e){
+    if(!firefoxAndroid||!e.isTrusted||getA().running||getA().chainEnabled||phase()!=='ready')return;
+    const brakeTarget=e.target?.closest?.('.cursor-interaction');
+    if(e.type==='pointerdown'&&brakeTarget){
+      firefoxReset();firefoxHeld={id:e.pointerId,at:now()};
+      firefoxLog('trusted-brake-down',e,{pointerId:e.pointerId});return;
+    }
+    if(!firefoxHeld)return;
+    if(e.type==='pointerup'||e.type==='pointercancel'){
+      if(firefoxHeld.id!==undefined&&e.pointerId!==firefoxHeld.id)return;
+    }else if(e.type!=='touchend'&&e.type!=='touchcancel')return;
+    // A touchend following pointerup is ignored after the held state clears.
+    const sawFive=firefoxSawFive,releaseId=e.pointerId??firefoxHeld.id;
+    firefoxHeld=null;firefoxReleaseCount++;
+    firefoxLog('trusted-brake-release',e,{pointerId:releaseId,sawFive});
+    if(!firefoxAssist||!sawFive)return;
+    const token=++firefoxToken;
+    // Let the original trusted release reach the game's handlers first.
+    firefoxRecoveryTimer=setTimeout(()=>{
+      firefoxRecoveryTimer=null;
+      if(disposed||token!==firefoxToken||!firefoxAssist||getA().running||getA().chainEnabled)return;
+      if(!doc||!trackRoot?.isConnected||phase()!=='ready')return;
+      const red=countRed();
+      if(red!==0){firefoxLog('release-accepted-or-lights-reset',null,{red});return;}
+      const speed=readSpeed(),clock=readClock();
+      if((Number.isFinite(speed)&&speed>0.5)||(Number.isFinite(clock)&&clock>0)){
+        firefoxLog('moving-no-recovery',null,{speed,clock});return;
+      }
+      const brake=doc.querySelector('.cursor-interaction'),w=doc.defaultView;
+      if(!brake||!w?.PointerEvent){firefoxLog('no-pointer-target');return;}
+      try{
+        brake.dispatchEvent(new w.PointerEvent('pointerup',{
+          bubbles:true,cancelable:true,pointerId:Number.isFinite(releaseId)?releaseId:1,
+          pointerType:'touch',isPrimary:true,button:0,buttons:0
+        }));
+        firefoxRecoveryCount++;
+        firefoxLog('fallback-pointerup-sent',null,{red,speed,clock});
+      }catch(err){firefoxLog('fallback-error',null,{message:String(err?.message||err).slice(0,90)});}
+    },70);
+  }
+  firefoxToggle.onclick=()=>{
+    firefoxAssist=!firefoxAssist;
+    if(!firefoxAssist)firefoxReset();
+    try{localStorage.setItem(FIREFOX_START_KEY,firefoxAssist?'on':'off');}catch(_){}
+    firefoxToggleLabel();say('Firefox 수동 출발 보완 '+(firefoxAssist?'켜짐':'꺼짐'));
+  };
+  firefoxDiagnostic.onclick=async()=>{
+    const safe={checkedAt:new Date().toISOString(),platform:'Android Firefox',
+      supported:firefoxAndroid,assistEnabled:firefoxAssist,
+      gamePhase:phase(),redLights:countRed(),held:!!firefoxHeld,sawFive:firefoxSawFive,
+      physicalReleases:firefoxReleaseCount,syntheticRecoveries:firefoxRecoveryCount,
+      events:firefoxEvents};
+    try{await navigator.clipboard.writeText(JSON.stringify(safe,null,2));say('수동 출발 진단 복사 완료');}
+    catch(err){say('진단 복사 실패: '+String(err?.message||err));}
+  };
   function status(message){lastStatus=message;statusNode.textContent='✋ 수동 기록 · '+message+(lastError?' / '+lastError:'');}
   function now(){return performance.now();}
   function round(n,d=3){return Number.isFinite(n)?Number(n.toFixed(d)):null;}
@@ -565,6 +644,7 @@ const manualTelemetry=(()=>{
     return {group,down,at:now(),pointerType:e.pointerType||(e.type.startsWith('touch')?'touch':'mouse')};
   }
   function onControl(e){
+    firefoxObserve(e);
     if(!e.isTrusted||getA().running||getA().chainEnabled)return;
     const item=eventFor(e);if(!item)return;
     if(e.type.startsWith('pointer'))lastPointerTime=item.at;
@@ -708,6 +788,7 @@ const manualTelemetry=(()=>{
     if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])
       doc.removeEventListener(ev,onControl,true);
     fbObserver?.disconnect();fbObserver=null;fbElement=null;
+    firefoxReset();
     doc=next;trackRoot=doc?.querySelector('#pedallap')||null;
     if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])
       doc.addEventListener(ev,onControl,{capture:true,passive:true});
@@ -732,7 +813,7 @@ const manualTelemetry=(()=>{
     if(!session){
       if(p==='ready'&&at-lastLightPoll>=35){
         lastLightPoll=at;
-        const red=countRed();if(red===5)redSeen=true;
+        const red=countRed();if(red===5){redSeen=true;if(firefoxHeld)firefoxSawFive=true;}
         if(redSeen&&red===0&&pending.some(x=>x.type==='brakeOn'))begin(at,'start-lights-release-observed');
       }else if(ACTIVE.test(p)&&previousPhase!==p)begin(at,'game-active-phase-observed');
     }
@@ -839,8 +920,8 @@ const manualTelemetry=(()=>{
   }
   recoveredCheckpoint();
   raf=requestAnimationFrame(tick);
-  return {version:VERSION,state:()=>({status:lastStatus,error:lastError,active:!!session,lastSavedRunId:lastSaved?.runId||null}),
-    destroy:()=>{disposed=true;if(raf!==null)cancelAnimationFrame(raf);if(slowTimer!==null)clearTimeout(slowTimer);if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])doc.removeEventListener(ev,onControl,true);
+  return {version:VERSION,state:()=>({status:lastStatus,error:lastError,active:!!session,lastSavedRunId:lastSaved?.runId||null,firefoxStartAssist:firefoxAssist,firefoxStartRecoveries:firefoxRecoveryCount}),
+    destroy:()=>{disposed=true;firefoxReset();firefoxToggle.remove();firefoxDiagnostic.remove();if(raf!==null)cancelAnimationFrame(raf);if(slowTimer!==null)clearTimeout(slowTimer);if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])doc.removeEventListener(ev,onControl,true);
       fbObserver?.disconnect();statusNode.remove();analysisBtn.remove();exportBtn.remove();}};
 })();
 
