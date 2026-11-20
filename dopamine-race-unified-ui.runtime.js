@@ -1,6 +1,6 @@
 // Dopamine Unified UI runtime — loaded from pinned GitHub commit by the stable bootstrap.
 // This file is not a userscript. The bootstrap provides page window and GM upload functions.
-// UI revision: add cross-refresh recording lifecycle audit and correct legacy UTC timestamps in KST diagnostics; no driving changes.
+// UI revision: passive MANUAL timing/segment telemetry, independent of fixed AUTO driving and bootstrap.
 (function () {
 'use strict';
 if(window.__dopamineUnifiedControl?.active)return;
@@ -714,18 +714,21 @@ const manualTelemetry=(()=>{
     previousPhase='';redSeen=false;lastFrame=0;lastPosition={};pending=[];
     if(!session)status(doc?'주행 준비 · 자동 관찰':'타임어택 화면 대기');
   }
-  let disposed=false,raf=null;
+  let disposed=false,raf=null,slowTimer=null;
   function tick(at){
     if(disposed)return;
+    const a=getA();
+    if(a.running||a.chainEnabled){
+      if(session&&!session.saveRequested)finalize('AUTO-took-control',false);
+      pending=[];redSeen=false;
+      slowTimer=setTimeout(()=>{if(!disposed)raf=requestAnimationFrame(tick);},250);
+      return;
+    }
     raf=requestAnimationFrame(tick);
     const next=game();if(next!==doc)attach(next);
     if(!doc)return;
     if(!trackRoot?.isConnected){trackRoot=doc.querySelector('#pedallap');if(!trackRoot)return;}
-    const p=phase(),a=getA();
-    if(a.running||a.chainEnabled){
-      if(session&&!session.saveRequested)finalize('AUTO-took-control',false);
-      pending=[];previousPhase=p;redSeen=false;return;
-    }
+    const p=phase();
     if(!session){
       if(p==='ready'&&at-lastLightPoll>=35){
         lastLightPoll=at;
@@ -832,7 +835,7 @@ const manualTelemetry=(()=>{
   recoveredCheckpoint();
   raf=requestAnimationFrame(tick);
   return {version:VERSION,state:()=>({status:lastStatus,error:lastError,active:!!session,lastSavedRunId:lastSaved?.runId||null}),
-    destroy:()=>{disposed=true;if(raf!==null)cancelAnimationFrame(raf);if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])doc.removeEventListener(ev,onControl,true);
+    destroy:()=>{disposed=true;if(raf!==null)cancelAnimationFrame(raf);if(slowTimer!==null)clearTimeout(slowTimer);if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])doc.removeEventListener(ev,onControl,true);
       fbObserver?.disconnect();statusNode.remove();analysisBtn.remove();exportBtn.remove();}};
 })();
 
