@@ -539,11 +539,13 @@ const manualTelemetry=(()=>{
   }
   function begin(at,source){
     const c=course(),v=vehicle();
+    const field=(id,def)=>{const n=Number(autoUi()?.querySelector('#'+id)?.value);return Number.isFinite(n)&&n>0?n:def;};
+    const tol=field('tolerance',8),referenceLines={brake:field('brakeY',315)-tol,boost:field('boostY',315)-tol};
     const t=new Date().toISOString();
     session={runId:'manual-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
       time:t,timeKst:kst(t),runSource:'MANUAL',mode:'manual',version:'manual-recorder-'+VERSION,
       recorderVersion:VERSION,courseId:c.id,courseName:c.name,vehicle:v,
-      startedAt:at,startedAtWall:Date.now(),startSource:source,
+      startedAt:at,startedAtWall:Date.now(),startSource:source,referenceLines,
       phaseAtStart:phase(),history:[],controlActions:pending.splice(0),feedbackLog:[],segmentResults:[],
       speedSamples:[],clockSamples:[],wheelLockObservations:[],inputSequence:0,finishObservedAt:null,
       saveRequested:false,saveState:'recording',lastClock:null};
@@ -575,21 +577,21 @@ const manualTelemetry=(()=>{
       return;
     }
     if(session.finishObservedAt!==null)return;
-    scan(item.at);const point=lastPosition[type],age=point?item.at-point.at:Infinity;
-    const referenceEl=autoUi()?.querySelector('#'+(item.group==='brake'?'brakeY':'boostY'));
-    const tolerance=Number(autoUi()?.querySelector('#tolerance')?.value||8);
-    const line=Number(referenceEl?.value||315)-tolerance;
-    const trustedPoint=age>=0&&age<130?point:null;
-    const dist=trustedPoint?line-trustedPoint.y:null,speed=trustedPoint?.speedPxMs||null;
-    const currentSpeed=readSpeed(),elapsed=round(item.at-session.startedAt,2);
+    const point=lastPosition[type],age=point?item.at-point.at:Infinity;
+    const line=session.referenceLines[item.group];
+    const trustedPoint=age>=0&&age<=70?point:null;
+    const speed=trustedPoint?.speedPxMs||null;
+    const estimatedY=trustedPoint?(trustedPoint.y+(speed>0?speed*age:0)):null;
+    const dist=estimatedY===null?null:line-estimatedY;
+    const currentSpeed=lastSpeed,elapsed=round(item.at-session.startedAt,2);
     const previousSame=session.history.slice().reverse().find(h=>h.type===(item.down?item.group==='brake'?'brakeOff':'boostOff':item.group==='brake'?'brakeOn':'boostOn'));
     const record={sequence:++session.inputSequence,eventKey:type+':'+session.inputSequence,type,event:names[type],
       time:round(item.at,2),monotonicAt:item.at,timeSinceStartMs:elapsed,pointerType:item.pointerType,
-      markerY:trustedPoint?.y??null,markerSpeedPxMs:speed,markerAgeMs:trustedPoint?round(age,2):null,
-      referenceLineY:line,referenceLineSource:'AUTO-calibration-only-not-game-judgement',
+      markerY:trustedPoint?.y??null,estimatedMarkerYAtInput:round(estimatedY,3),markerSpeedPxMs:speed,markerAgeMs:trustedPoint?round(age,2):null,
+      referenceLineY:line,referenceLineSource:'AUTO-calibration-only-not-game-judgement',markerTimingMethod:'prior-sampled-frame',
       distanceToReferencePx:dist===null?null:round(dist,3),
       estimatedTimeToReferenceMs:dist!==null&&speed>0?round(dist/speed,2):null,
-      speedKmh:currentSpeed,gameHudAtInputSec:readClock()??session.lastClock,averageFrameMs:round(frameAvg,2),
+      speedKmh:currentSpeed,gameHudSampleAtInputSec:session.lastClock,averageFrameMs:round(frameAvg,2),
       heldDurationMs:!item.down&&previousSame?round(item.at-previousSame.monotonicAt,2):null,
       frameTrace:{before:trace[type].slice(-8),after:[]},
       feedbackGrade:null,feedbackDirection:null,feedbackDistanceM:null,feedback:null,feedbackObservedMs:null};
@@ -643,6 +645,17 @@ const manualTelemetry=(()=>{
     s.saveRequested=true;
     fbObserver?.disconnect();fbObserver=null;fbElement=null;
     const at=now(),end=s.finishObservedAt??at;
+    // Refine the original event-time estimate from bracketing frame samples after all inputs are processed.
+    for(const h of s.history){
+      const before=h.frameTrace?.before?.at(-1),after=h.frameTrace?.after?.find(x=>x.at>h.time);
+      if(!before||!after)continue;
+      const span=after.at-before.at,dy=after.y-before.y;
+      if(!(span>0&&span<=110&&dy>=0&&dy<=45&&h.time>=before.at&&h.time<=after.at))continue;
+      const interpolated=before.y+dy*(h.time-before.at)/span;
+      h.interpolatedMarkerYAtInput=round(interpolated,3);
+      h.interpolatedDistanceToReferencePx=round(h.referenceLineY-interpolated,3);
+      h.markerTimingMethod='bounded-bracketing-frames-interpolation';
+    }
     const finalResult=finished?readResultClock():null;
     const lap=finished?(finalResult??readClock()??s.lastClock):null;
     const grades={perfect:0,great:0,good:0,bad:0,miss:0};
@@ -663,7 +676,7 @@ const manualTelemetry=(()=>{
         ungradedInputs:s.history.filter(x=>!x.feedbackGrade).length,
         unmatchedFeedback:s.feedbackLog.filter(x=>x.kind==='event'&&!x.matched).length},
       measurementNotes:{clientSplits:'Monotonic performance clock at visible feedback or manual brake on. Not official splits.',
-        controls:'Trusted capture-phase DOM pointer/mouse/touch events; browser dispatch latency and canvas sample uncertainty apply.',
+        controls:'Trusted capture-phase DOM pointer/mouse/touch events. No canvas/HUD reads in event handler; event time is captured then marker position estimated from cached or bracketing frames.',
         markerLine:'Reference line from AUTO calibration; not proof of true game judgement threshold.',
         autoTraining:'observation-only; manual samples do not adjust AUTO timing'}};
     lastSaved=result;session=null;pending=[];status('원본 보관 중 · '+result.runId);
