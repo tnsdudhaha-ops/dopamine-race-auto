@@ -398,7 +398,7 @@ const manualTelemetry=(()=>{
   const COLOR={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
   const names={brakeOn:'브레이크 ON',brakeOff:'브레이크 OFF',boostOn:'BOOST ON',boostOff:'BOOST OFF'};
   let doc=null,trackRoot=null,session=null,redSeen=false,previousPhase='',lastFrame=0,frameAvg=16.67,lastCanvasRead=0;
-  let pending=[],pressState={brake:false,boost:false},lastPointerTime=0,lastCheckpoint=0,lastSaved=null;
+  let pending=[],pressState={brake:false,boost:false},lastPointerTime=0,lastCheckpoint=0,lastClockPoll=0,lastLightPoll=0,lastSaved=null;
   let fbElement=null,fbObserver=null,lastFeedback='',feedbackCleared=true,lastError='',lastStatus='게임 화면 대기';
   let lastPosition={},trace={brakeOn:[],brakeOff:[],boostOn:[],boostOff:[]},lastSpeed=null,lastSpeedAt=0;
   const statusNode=document.createElement('div');
@@ -462,6 +462,7 @@ const manualTelemetry=(()=>{
     return d<=48?best:null;
   }
   function scan(at){
+    lastCanvasRead=at;
     const canvas=doc?.querySelector('canvas[aria-label="타임어택 주행 트랙"]');
     if(!canvas||canvas.width<=320||canvas.height<=80)return;
     const top=80,bottom=Math.min(420,canvas.height),x=320;
@@ -544,7 +545,7 @@ const manualTelemetry=(()=>{
       speedSamples:[],clockSamples:[],wheelLockObservations:[],inputSequence:0,finishObservedAt:null,
       saveRequested:false,saveState:'recording',lastClock:null};
     for(const action of session.controlActions){action.role='preparation';action.relativeMs=round(action.at-session.startedAt,2);delete action.at;}
-    pressState={brake:false,boost:false};redSeen=false;frameAvg=16.67;lastFrame=at;lastCheckpoint=0;lastSpeed=null;lastSpeedAt=0;
+    pressState={brake:false,boost:false};redSeen=false;frameAvg=16.67;lastFrame=at;lastCheckpoint=0;lastClockPoll=0;lastSpeed=null;lastSpeedAt=0;
     lastPosition={};for(const key of Object.keys(trace))trace[key]=[];
     status('기록 중 · '+v.tire+' / '+c.name);
     observeFeedback();
@@ -693,7 +694,8 @@ const manualTelemetry=(()=>{
       pending=[];previousPhase=p;redSeen=false;return;
     }
     if(!session){
-      if(p==='ready'){
+      if(p==='ready'&&at-lastLightPoll>=35){
+        lastLightPoll=at;
         const red=countRed();if(red===5)redSeen=true;
         if(redSeen&&red===0&&pending.some(x=>x.type==='brakeOn'))begin(at,'start-lights-release-observed');
       }else if(ACTIVE.test(p)&&previousPhase!==p)begin(at,'game-active-phase-observed');
@@ -713,7 +715,8 @@ const manualTelemetry=(()=>{
         const v=readSpeed();lastSpeedAt=at;
         if(Number.isFinite(v)&&v>=0&&v<=450){lastSpeed=v;session.speedSamples.push({timeMs:round(at-session.startedAt),kmh:v});if(session.speedSamples.length>1400)session.speedSamples.shift();}
       }
-      if(at-lastCheckpoint>=170){
+      if(at-lastClockPoll>=170){
+        lastClockPoll=at;
         const clock=readClock();
         if(clock!==null){session.lastClock=clock;const last=session.clockSamples.at(-1);
           if(!last||at-session.startedAt-last.timeMs>=550)session.clockSamples.push({timeMs:round(at-session.startedAt),seconds:clock});}
