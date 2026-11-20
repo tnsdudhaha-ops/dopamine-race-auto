@@ -792,14 +792,19 @@ const manualTelemetry=(()=>{
           '구간 소요시간 (판정 메시지 관측 기준, 공식 스플릿 아님)');
         for(const sec of latest.timingSections?.fromFeedback||[])lines.push('  '+sec.name+': '+sec.durationSec+'초 / 누적 '+round(sec.toMs/1000)+'초');
         lines.push('','게임 HUD로 관측한 구간시간 (공식 스플릿 아님)');
-        for(const sec of latest.timingSections?.fromGameHud||[])lines.push('  '+sec.name+': '+sec.durationSec+'초 / 누적 '+sec.toSec+'초');
+        for(const [i,sec] of (latest.timingSections?.fromGameHud||[]).entries()){
+          const comparableSec=prev?.timingSections?.fromGameHud?.[i];
+          const delta=comparableSec?.name===sec.name?round(sec.durationSec-comparableSec.durationSec):null;
+          lines.push('  '+sec.name+': '+sec.durationSec+'초 / 누적 '+sec.toSec+'초'+(delta!==null?' / 직전 '+(delta>0?'+':'')+delta+'초':'') );
+        }
         lines.push('','브레이크 기준 구간');
         for(const sec of latest.timingSections?.fromBrake||[])lines.push('  '+sec.name+': '+sec.durationSec+'초 / 평균속도 '+(sec.avgSpeedKmh??'미측정')+'km/h / 최대속도 '+(sec.maxSpeedKmh??'미측정')+'km/h');
         lines.push('','입력 타이밍 / 판정');
         for(const h of latest.history||[])lines.push('  #'+h.sequence+' '+names[h.type]+' @'+round(h.timeSinceStartMs/1000)+'초 · '+(h.feedbackGrade||'미판정')+
-          (h.feedbackDirection?' '+h.feedbackDirection:'')+
+          (h.feedbackDirection?' '+h.feedbackDirection+(h.feedbackDistanceM!==null?' '+h.feedbackDistanceM+'m':''):'')+
           (h.heldDurationMs!==null?' · 유지 '+h.heldDurationMs+'ms':'')+
-          (h.distanceToReferencePx!==null?' · 기준선 '+h.distanceToReferencePx+'px':''));
+          (h.interpolatedDistanceToReferencePx!==null?' · 보간 기준선 '+h.interpolatedDistanceToReferencePx+'px':
+            h.distanceToReferencePx!==null?' · 기준선 '+h.distanceToReferencePx+'px':''));
         lines.push('','※ 기준선 거리는 AUTO 설정선 대비 관측값이며 실제 게임 판정선의 정밀 오차를 뜻하지 않습니다.');
       }
       q('#du-report-body').textContent=lines.join('\n');
