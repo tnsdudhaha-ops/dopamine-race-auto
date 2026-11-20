@@ -387,7 +387,407 @@ h.addEventListener('pointercancel',()=>{drag=null;});
 }
 window.addEventListener('resize',position);
 const timer=setInterval(()=>{render();position();},750);
-window.__dopamineUnifiedControl={active:true,destroy:()=>{clearInterval(timer);cloudUploader.destroy();box.remove();window.__dopamineUnifiedControl=null;}};
+
+// Passive MANUAL telemetry: no synthetic game input, no change to AUTO prediction.
+const manualTelemetry=(()=>{
+  'use strict';
+  const VERSION='0.1.0',CHECKPOINT='dopamine-manual:checkpoint-v1';
+  const FINISH=/^(finished|finish|complete|completed|result|results|ended|end|done)$/;
+  const ACTIVE=/^(running|racing|playing|active|in-progress)$/;
+  const STOPPED=/^(interrupted|aborted|canceled|cancelled|failed|stopped|quit)$/;
+  const COLOR={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
+  const names={brakeOn:'브레이크 ON',brakeOff:'브레이크 OFF',boostOn:'BOOST ON',boostOff:'BOOST OFF'};
+  let doc=null,trackRoot=null,session=null,redSeen=false,previousPhase='',lastFrame=0,frameAvg=16.67,lastCanvasRead=0;
+  let pending=[],pressState={brake:false,boost:false},lastPointerTime=0,lastCheckpoint=0,lastSaved=null;
+  let fbElement=null,fbObserver=null,lastFeedback='',feedbackCleared=true,lastError='',lastStatus='게임 화면 대기';
+  let lastPosition={},trace={brakeOn:[],brakeOff:[],boostOn:[],boostOff:[]},lastSpeed=null,lastSpeedAt=0;
+  const statusNode=document.createElement('div');
+  statusNode.className='status';statusNode.style.color='#bbdfcf';statusNode.textContent='✋ 수동 기록 · 게임 화면 대기';
+  q('#du-race-status').after(statusNode);
+  const analysisBtn=document.createElement('button'),exportBtn=document.createElement('button');
+  analysisBtn.textContent='✋ 수동 주행 분석';exportBtn.textContent='💾 수동 기록 백업';
+  q('#du-advanced .grid').append(analysisBtn,exportBtn);
+  function status(message){lastStatus=message;statusNode.textContent='✋ 수동 기록 · '+message+(lastError?' / '+lastError:'');}
+  function now(){return performance.now();}
+  function round(n,d=3){return Number.isFinite(n)?Number(n.toFixed(d)):null;}
+  function visible(el){return !!el&&el.isConnected&&el.getClientRects().length>0;}
+  function text(el){return String(el?.innerText||el?.textContent||'').replace(/\s+/g,' ').trim();}
+  function phase(){return String(trackRoot?.dataset.phase||'').toLowerCase();}
+  function kst(iso){const n=Date.parse(iso);return Number.isFinite(n)?new Date(n+9*3600000).toISOString().replace('Z','+09:00'):null;}
+  function game(){try{return document.querySelector('iframe[title="타임어택"]')?.contentDocument||null;}catch(_){return null;}}
+  function course(){
+    let id='unknown-course',name=getA().courseName||'미확인';
+    try{const t=[...(doc?.querySelectorAll('script')||[])].map(x=>x.textContent||'').join('\n');id=t.match(/"id"\s*:\s*"([^"]+)"/)?.[1]||id;name=t.match(/"name"\s*:\s*"([^"]+)"/)?.[1]||name;}catch(_){}
+    return {id,name};
+  }
+  function vehicle(){
+    const s=autoUi()?.querySelector('#vehicle-info')?.textContent||'';
+    const get=re=>s.match(re)?.[1]||null;
+    const stars=Number(get(/별:\s*(\d+)/));
+    const top=Number(get(/표시 최고속력:\s*(\d+)/));
+    return {name:get(/차량:\s*([^\n]+)/),grade:get(/등급:\s*(SSR|SR|S|R)/),
+      stars:stars>0?stars:null,tire:get(/타이어:\s*(hard|medium|soft)/i),
+      displayTopSpeedKmh:top>0?top:null,source:'AUTO-readonly-display',confidence:s.includes('인식: verified-dom')?'verified-dom':'partial'};
+  }
+  function readSpeed(){
+    const els=[...(doc?.querySelectorAll('[data-speed],[aria-label],[class*="speed"],[id*="speed"]')||[])].slice(0,100);
+    for(const el of els){if(!visible(el))continue;const raw=el.getAttribute('data-speed')||el.getAttribute('aria-label')||text(el);
+      if(/최고속|최대속|top.?speed/i.test(raw))continue;
+      const m=raw.match(/(?:현재\s*속도|속도|speed)?\s*[:：]?\s*(\d{1,3}(?:\.\d+)?)\s*km\s*\/\s*h/i);
+      if(m)return Number(m[1]);}
+    return null;
+  }
+  function readClock(){
+    const r=trackRoot;if(!r)return null;
+    const els=[...r.querySelectorAll('[data-lap-time],[data-race-time],[class*="lap-time"],[class*="lapTime"],[class*="lapTimer"],[id*="lap-time"],[class*="race-timer"],span,small,strong')].slice(0,240);
+    for(const el of els){if(!visible(el))continue;const raw=el.getAttribute('data-lap-time')||el.getAttribute('data-race-time')||text(el);
+      if(raw.length>140||/랭킹|순위|최고\s*기록|best\s*lap/i.test(raw))continue;
+      const m=raw.match(/(?:랩\s*타임|lap\s*time)\s*[:：]?\s*((?:\d{1,2}:)?\d{1,3}\.\d{1,3})/i)||
+        (/^(?:\d{1,2}:)?\d{1,3}\.\d{1,3}(?:\s*초)?$/.test(raw)&&/lap|timer|race-timer/i.test(el.className+' '+el.id)?[null,raw]:null);
+      if(m){const time=m[1].trim(),parts=time.match(/^(?:(\d+):)?(\d+)\.(\d{1,3})/);
+        if(parts){const n=Number(parts[1]||0)*60+Number(parts[2])+Number('0.'+parts[3]);if(n>0&&n<900)return n;}}
+    }
+    return null;
+  }
+  function readResultClock(){
+    for(const el of [...(trackRoot?.querySelectorAll('[class*="result"],[id*="result"],[class*="finish"]')||[])].slice(0,60)){
+      if(!visible(el))continue;const raw=text(el);if(raw.length>500)continue;
+      const m=raw.match(/(?:최종\s*(?:랩\s*타임|기록|시간)|공식\s*(?:기록|시간)|final\s*(?:lap\s*time|time))\s*[:：]?\s*((?:\d{1,2}:)?\d{1,3}\.\d{1,3})/i);
+      if(m){const a=m[1].match(/^(?:(\d+):)?(\d+)\.(\d{1,3})$/);if(a)return Number(a[1]||0)*60+Number(a[2])+Number('0.'+a[3]);}
+    }
+    return null;
+  }
+  function classify(r,g,b){if(Math.max(r,g,b)<95)return null;let best=null,d=Infinity;
+    for(const [type,rgb] of Object.entries(COLOR)){const diff=Math.hypot(r-rgb[0],g-rgb[1],b-rgb[2]);if(diff<d){d=diff;best=type;}}
+    return d<=48?best:null;
+  }
+  function scan(at){
+    const canvas=doc?.querySelector('canvas[aria-label="타임어택 주행 트랙"]');
+    if(!canvas||canvas.width<=320||canvas.height<=80)return;
+    const top=80,bottom=Math.min(420,canvas.height),x=320;
+    let data;try{data=canvas.getContext('2d')?.getImageData(x,top,1,bottom-top)?.data;}catch(_){return;}
+    if(!data)return;
+    const found=[],bands=[];let band=null;
+    function flush(){if(band&&band.count>=4)bands.push({type:band.type,y:(band.start+band.end)/2});}
+    for(let i=0;i<bottom-top;i++){const p=i*4,type=classify(data[p],data[p+1],data[p+2]),y=top+i;
+      if(type&&band&&band.type===type&&y-band.end<=2){band.end=y;band.count++;}
+      else{flush();band=type?{type,start:y,end:y,count:1}:null;}}
+    flush();
+    for(const type of Object.keys(COLOR)){
+      const targets=bands.filter(b=>b.type===type);
+      if(!targets.length)continue;
+      const reference=type.startsWith('brake')?315:315;
+      const best=targets.sort((a,b)=>Math.abs(a.y-reference)-Math.abs(b.y-reference))[0];
+      const prior=lastPosition[type],dt=prior?at-prior.at:0;
+      const dy=prior?best.y-prior.y:0;
+      const speed=dt>4&&dt<150&&dy>=0&&dy<80?dy/dt:null;
+      const point={at:round(at,2),y:round(best.y,2),speedPxMs:round(speed,5),frameMs:round(frameAvg,2)};
+      lastPosition[type]=point;trace[type].push(point);if(trace[type].length>12)trace[type].shift();
+      found.push(point);
+    }
+    lastCanvasRead=at;
+    return found;
+  }
+  function feedbackKind(raw){
+    if(/^진입\s+/i.test(raw)&&/\s*\/\s*탈출\s+/i.test(raw)){
+      const m=raw.match(/^진입\s+(PERFECT|GREAT|GOOD|BAD|MISS)(?:\s*·\s*(빠름|늦음)\s*([\d.]+)\s*m)?\s*\/\s*탈출\s+(PERFECT|GREAT|GOOD|BAD|MISS)(?:\s*·\s*(빠름|늦음)\s*([\d.]+)\s*m)?(?:\s*·\s*(\d+)\s*km\/h)?/i);
+      return {kind:'segment',entry:m?.[1]?.toLowerCase()||null,exit:m?.[4]?.toLowerCase()||null,
+        speedKmh:m?.[7]?Number(m[7]):null,entryDirection:m?.[2]||null,exitDirection:m?.[5]||null,raw};
+    }
+    let type=null;
+    if(/브레이크\s*진입/.test(raw))type='brakeOn';else if(/브레이크\s*해제/.test(raw))type='brakeOff';
+    else if(/부스터\s*ON|BOOST\s*ON/i.test(raw))type='boostOn';else if(/부스터\s*OFF|BOOST\s*OFF/i.test(raw))type='boostOff';
+    if(!type)return null;
+    const g=raw.match(/PERFECT|GREAT|GOOD|BAD|MISS|퍼펙트|그레이트|굿|배드|미스/i)?.[0]?.toLowerCase();
+    const local={퍼펙트:'perfect',그레이트:'great',굿:'good',배드:'bad',미스:'miss'};
+    if(!g)return null;const dir=/빠름|EARLY/i.test(raw)?'early':/늦음|LATE/i.test(raw)?'late':null;
+    return {kind:'event',type,grade:local[g]||g,direction:dir,distanceM:Number(raw.match(/(?:빠름|늦음|EARLY|LATE)\s*([\d.]+)\s*m/i)?.[1])||null,raw};
+  }
+  function processFeedback(raw){
+    if(!session||!raw)return;
+    const parsed=feedbackKind(raw),at=now();
+    if(/휠\s*락|wheel\s*lock/i.test(raw))session.wheelLockObservations.push({timeMs:round(at-session.startedAt),raw:raw.slice(0,220)});
+    if(!parsed)return;
+    const elapsed=round(at-session.startedAt,2);
+    if(parsed.kind==='segment'){
+      const prev=session.segmentResults.at(-1)?.timeMs||0;
+      session.segmentResults.push({...parsed,timeMs:elapsed,elapsedSec:round(elapsed/1000),splitSec:round((elapsed-prev)/1000),
+        timingSource:'browser-feedback-observation-not-official-game-split'});
+      return;
+    }
+    const candidates=session.history.filter(h=>h.type===parsed.type&&!h.feedbackGrade&&at-h.monotonicAt>=0&&at-h.monotonicAt<=1800);
+    const record=candidates.length?candidates.at(-1):null;
+    if(record){record.feedbackGrade=parsed.grade;record.feedbackDirection=parsed.direction;record.feedbackDistanceM=parsed.distanceM;record.feedback=raw;record.feedbackObservedMs=elapsed;}
+    session.feedbackLog.push({...parsed,timeMs:elapsed,matched:!!record,eventSequence:record?.sequence||null});
+  }
+  function observeFeedback(){
+    const next=trackRoot?.querySelector('.feedback');
+    if(next===fbElement)return;
+    fbObserver?.disconnect();fbElement=next;lastFeedback='';feedbackCleared=true;
+    if(!next)return;
+    fbObserver=new MutationObserver(()=>{
+      if(!session||getA().running)return;
+      const value=fbElement?.textContent?.trim()||'';
+      if(!value){feedbackCleared=true;return;}
+      if(value!==lastFeedback||feedbackCleared){lastFeedback=value;feedbackCleared=false;processFeedback(value);}
+    });
+    fbObserver.observe(next,{subtree:true,characterData:true,childList:true});
+  }
+  function begin(at,source){
+    const c=course(),v=vehicle();
+    const t=new Date().toISOString();
+    session={runId:'manual-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
+      time:t,timeKst:kst(t),runSource:'MANUAL',mode:'manual',version:'manual-recorder-'+VERSION,
+      recorderVersion:VERSION,courseId:c.id,courseName:c.name,vehicle:v,
+      startedAt:at,startedAtWall:Date.now(),startSource:source,
+      phaseAtStart:phase(),history:[],controlActions:pending.splice(0),feedbackLog:[],segmentResults:[],
+      speedSamples:[],clockSamples:[],wheelLockObservations:[],inputSequence:0,finishObservedAt:null,
+      saveRequested:false,saveState:'recording',lastClock:null};
+    for(const action of session.controlActions){action.role='preparation';action.relativeMs=round(action.at-session.startedAt,2);delete action.at;}
+    pressState={brake:false,boost:false};redSeen=false;frameAvg=16.67;lastFrame=at;lastCheckpoint=0;lastSpeed=null;lastSpeedAt=0;
+    lastPosition={};for(const key of Object.keys(trace))trace[key]=[];
+    status('기록 중 · '+v.tire+' / '+c.name);
+    observeFeedback();
+  }
+  function eventFor(e){
+    const target=e.target?.closest?.('.cursor-interaction,.boost-key');
+    if(!target)return null;
+    const group=target.matches('.boost-key')?'boost':'brake';
+    const down=/^(pointerdown|mousedown|touchstart)$/.test(e.type);
+    const up=/^(pointerup|mouseup|touchend|pointercancel|touchcancel)$/.test(e.type);
+    if(!down&&!up)return null;
+    return {group,down,at:now(),pointerType:e.pointerType||(e.type.startsWith('touch')?'touch':'mouse')};
+  }
+  function onControl(e){
+    if(!e.isTrusted||getA().running||getA().chainEnabled)return;
+    const item=eventFor(e);if(!item)return;
+    if(e.type.startsWith('pointer'))lastPointerTime=item.at;
+    else if(item.at-lastPointerTime<320)return; // do not double-count synthetic mouse/touch events
+    if(pressState[item.group]===item.down)return;
+    pressState[item.group]=item.down;
+    const type=item.group==='brake'?(item.down?'brakeOn':'brakeOff'):(item.down?'boostOn':'boostOff');
+    if(!session){
+      if(phase()==='ready'){pending.push({type,at:item.at,pointerType:item.pointerType});if(pending.length>12)pending.shift();}
+      return;
+    }
+    if(session.finishObservedAt!==null)return;
+    scan(item.at);const point=lastPosition[type],age=point?item.at-point.at:Infinity;
+    const referenceEl=autoUi()?.querySelector('#'+(item.group==='brake'?'brakeY':'boostY'));
+    const tolerance=Number(autoUi()?.querySelector('#tolerance')?.value||8);
+    const line=Number(referenceEl?.value||315)-tolerance;
+    const trustedPoint=age>=0&&age<130?point:null;
+    const dist=trustedPoint?line-trustedPoint.y:null,speed=trustedPoint?.speedPxMs||null;
+    const currentSpeed=readSpeed(),elapsed=round(item.at-session.startedAt,2);
+    const previousSame=session.history.slice().reverse().find(h=>h.type===(item.down?item.group==='brake'?'brakeOff':'boostOff':item.group==='brake'?'brakeOn':'boostOn'));
+    const record={sequence:++session.inputSequence,eventKey:type+':'+session.inputSequence,type,event:names[type],
+      time:round(item.at,2),monotonicAt:item.at,timeSinceStartMs:elapsed,pointerType:item.pointerType,
+      markerY:trustedPoint?.y??null,markerSpeedPxMs:speed,markerAgeMs:trustedPoint?round(age,2):null,
+      referenceLineY:line,referenceLineSource:'AUTO-calibration-only-not-game-judgement',
+      distanceToReferencePx:dist===null?null:round(dist,3),
+      estimatedTimeToReferenceMs:dist!==null&&speed>0?round(dist/speed,2):null,
+      speedKmh:currentSpeed,averageFrameMs:round(frameAvg,2),
+      heldDurationMs:!item.down&&previousSame?round(item.at-previousSame.monotonicAt,2):null,
+      frameTrace:{before:trace[type].slice(-8),after:[]},
+      feedbackGrade:null,feedbackDirection:null,feedbackDistanceM:null,feedback:null,feedbackObservedMs:null};
+    session.history.push(record);
+    session.controlActions.push({type,relativeMs:elapsed,pointerType:item.pointerType,role:'racing'});
+  }
+  function checkpoint(at){
+    if(!session||at-lastCheckpoint<1700)return;
+    lastCheckpoint=at;
+    try{
+      const snapshot={...session,history:session.history.map(h=>({...h,frameTrace:undefined})),speedSamples:session.speedSamples.slice(-20),
+        clockSamples:session.clockSamples.slice(-20)};
+      localStorage.setItem(CHECKPOINT,JSON.stringify(snapshot));
+    }catch(e){lastError='임시 저장 실패';}
+  }
+  function elapsedSections(s,end){
+    const marks=s.segmentResults.map((x,i)=>({name:'판정 구간 '+(i+1),timeMs:x.timeMs}));
+    const split=[];let before=0;
+    for(const m of marks){split.push({name:m.name,fromMs:round(before),toMs:round(m.timeMs),durationSec:round((m.timeMs-before)/1000),
+      source:'feedback-observation'});before=m.timeMs;}
+    if(Number.isFinite(end)&&end>before)split.push({name:'마지막 구간',fromMs:round(before),toMs:round(end),durationSec:round((end-before)/1000),
+      source:'feedback-to-finish-observation'});
+    const brakes=s.history.filter(x=>x.type==='brakeOn'),byBrake=[],boundaries=[{timeSinceStartMs:0},...brakes];
+    if(Number.isFinite(end))boundaries.push({timeSinceStartMs:end});
+    for(let i=1;i<boundaries.length;i++){
+      const a=boundaries[i-1].timeSinceStartMs,b=boundaries[i].timeSinceStartMs;
+      if(b>a)byBrake.push({name:'브레이크 기준 '+i+'구간',fromMs:round(a),toMs:round(b),durationSec:round((b-a)/1000),
+        source:'brake-on-to-next-brake-on-proxy'});
+    }
+    return {fromFeedback:split,fromBrake:byBrake,officialSplitTimesAvailable:false};
+  }
+  async function finalize(reason,finished){
+    const s=session;if(!s||s.saveRequested)return;
+    s.saveRequested=true;
+    fbObserver?.disconnect();fbObserver=null;fbElement=null;
+    const at=now(),end=s.finishObservedAt??at;
+    const finalResult=finished?readResultClock():null;
+    const lap=finished?(finalResult??readClock()??s.lastClock):null;
+    const grades={perfect:0,great:0,good:0,bad:0,miss:0};
+    for(const x of s.feedbackLog)if(x.kind==='event'&&Object.hasOwn(grades,x.grade))grades[x.grade]++;
+    const result={runId:s.runId,runSource:'MANUAL',mode:'manual',version:s.version,recorderVersion:s.recorderVersion,
+      time:s.time,timeKst:s.timeKst,timeZone:'Asia/Seoul',
+      courseId:s.courseId,courseName:s.courseName,vehicle:s.vehicle,
+      complete:!!finished,reason,events:s.history.length,grades,
+      history:s.history.map(({monotonicAt,...record})=>record),controlActions:s.controlActions,
+      feedbackLog:s.feedbackLog,segmentResults:s.segmentResults,
+      timingSections:elapsedSections(s,round(end-s.startedAt,2)),
+      gameTiming:{recordedLapTimeSec:lap,recordedLapTimeSource:finalResult!==null?'game-explicit-result':lap!==null?'game-hud-at-finish':null,
+        recordedLapTimeStatus:finalResult!==null?'explicit-final-result':lap!==null?'hud-finish-observed-not-officially-verified':'not-detected',
+        hudClockTrace:s.clockSamples},
+      observedRaceDurationMs:round(end-s.startedAt),raceDurationSource:'client-observed-start-to-finish',
+      speedSamples:s.speedSamples,wheelLockObservations:s.wheelLockObservations,
+      completionEvidence:{phase:phase(),matchedInputs:s.history.filter(x=>x.feedbackGrade).length,
+        ungradedInputs:s.history.filter(x=>!x.feedbackGrade).length,
+        unmatchedFeedback:s.feedbackLog.filter(x=>x.kind==='event'&&!x.matched).length},
+      measurementNotes:{clientSplits:'Monotonic performance clock at visible feedback or manual brake on. Not official splits.',
+        controls:'Trusted capture-phase DOM pointer/mouse/touch events; browser dispatch latency and canvas sample uncertainty apply.',
+        markerLine:'Reference line from AUTO calibration; not proof of true game judgement threshold.',
+        autoTraining:'observation-only; manual samples do not adjust AUTO timing'}};
+    lastSaved=result;session=null;pending=[];status('원본 보관 중 · '+result.runId);
+    try{
+      if(!window.__duRunArchive?.put)throw Error('AUTO IndexedDB 보관소 연결 실패');
+      await window.__duRunArchive.put(result);
+      try{localStorage.removeItem(CHECKPOINT);}catch(_){}
+      lastError='';status('저장됨 · '+(finished?'완주':'미완주')+' · '+(lap===null?'랩타임 미확인':lap+'초'));
+      cloudUploader.retry(); // existing authenticated upload path, server ACK still required
+    }catch(e){
+      window.__duUnsavedManualRun=result;
+      lastError='원본 보관 실패: '+String(e?.message||e).slice(0,85);
+      status('⚠ 기록 백업 필요');
+    }
+  }
+  function countRed(){
+    const lights=[...(doc?.querySelectorAll('.lights i')||[])];
+    if(lights.length!==5)return -1;
+    let count=0;
+    for(const el of lights){
+      const raw=doc.defaultView.getComputedStyle(el).backgroundColor;
+      const rgb=raw.match(/\d+/g)?.map(Number);
+      if(rgb&&rgb[0]>110&&rgb[0]>rgb[1]*1.35&&rgb[0]>rgb[2]*1.35)count++;
+    }
+    return count;
+  }
+  function attach(next){
+    if(doc===next)return;
+    if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])
+      doc.removeEventListener(ev,onControl,true);
+    fbObserver?.disconnect();fbObserver=null;fbElement=null;
+    doc=next;trackRoot=doc?.querySelector('#pedallap')||null;
+    if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])
+      doc.addEventListener(ev,onControl,{capture:true,passive:true});
+    previousPhase='';redSeen=false;lastFrame=0;lastPosition={};pending=[];
+    if(!session)status(doc?'주행 준비 · 자동 관찰':'타임어택 화면 대기');
+  }
+  let disposed=false,raf=null;
+  function tick(at){
+    if(disposed)return;
+    raf=requestAnimationFrame(tick);
+    const next=game();if(next!==doc)attach(next);
+    if(!doc)return;
+    if(!trackRoot?.isConnected){trackRoot=doc.querySelector('#pedallap');if(!trackRoot)return;}
+    const p=phase(),a=getA();
+    if(a.running||a.chainEnabled){
+      if(session&&!session.saveRequested)finalize('AUTO-took-control',false);
+      pending=[];previousPhase=p;redSeen=false;return;
+    }
+    if(!session){
+      if(p==='ready'){
+        const red=countRed();if(red===5)redSeen=true;
+        if(redSeen&&red===0&&pending.some(x=>x.type==='brakeOn'))begin(at,'start-lights-release-observed');
+      }else if(ACTIVE.test(p)&&previousPhase!==p)begin(at,'game-active-phase-observed');
+    }
+    if(session&&!session.saveRequested){
+      if(lastFrame){const dt=at-lastFrame;if(dt>0&&dt<100)frameAvg=frameAvg*.85+dt*.15;}
+      lastFrame=at;
+      if(at-lastCanvasRead>=32){
+        scan(at);
+        for(const record of session.history.slice(-5)){
+          if(!record.frameTrace||at-record.time>260||record.frameTrace.after.length>=8)continue;
+          const pt=lastPosition[record.type];
+          if(pt&&pt.at>record.time)record.frameTrace.after.push({...pt});
+        }
+      }
+      if(at-lastSpeedAt>=110){
+        const v=readSpeed();lastSpeedAt=at;
+        if(Number.isFinite(v)&&v>=0&&v<=450){lastSpeed=v;session.speedSamples.push({timeMs:round(at-session.startedAt),kmh:v});if(session.speedSamples.length>1400)session.speedSamples.shift();}
+      }
+      if(at-lastCheckpoint>=170){
+        const clock=readClock();
+        if(clock!==null){session.lastClock=clock;const last=session.clockSamples.at(-1);
+          if(!last||at-session.startedAt-last.timeMs>=550)session.clockSamples.push({timeMs:round(at-session.startedAt),seconds:clock});}
+      }
+      observeFeedback();checkpoint(at);
+      if(FINISH.test(p)){
+        if(session.finishObservedAt===null)session.finishObservedAt=at;
+        if(at-session.finishObservedAt>=900)finalize('complete',true);
+      }else if(STOPPED.test(p)||(p==='ready'&&previousPhase!=='ready'&&session.finishObservedAt===null)){
+        finalize('interrupted',false);
+      }else if(session.finishObservedAt!==null&&p==='ready')finalize('complete',true);
+    }
+    previousPhase=p;
+  }
+  async function report(){
+    try{
+      const saved=await allSavedRuns(),manual=saved.filter(r=>r.runSource==='MANUAL');
+      const completed=manual.filter(r=>r.complete),totalEvents=completed.reduce((n,r)=>n+(r.events||0),0);
+      const perfect=completed.reduce((n,r)=>n+(r.grades?.perfect||0),0);
+      const allPerfect=completed.filter(r=>r.events>0&&(r.grades?.perfect||0)===r.events&&r.completionEvidence?.ungradedInputs===0&&r.completionEvidence?.unmatchedFeedback===0).length;
+      const lap=completed.map(r=>r.gameTiming?.recordedLapTimeSec).filter(x=>Number.isFinite(x)&&x>0);
+      const latest=lastSaved||manual.at(-1);
+      const lines=['✋ MANUAL 정밀 분석 · 기록기 v'+VERSION,
+        '저장 '+manual.length+'판 / 완주 '+completed.length+'판',
+        '입력별 PERFECT '+(totalEvents?round(perfect/totalEvents*100,2)+'%':'미측정')+' ('+perfect+'/'+totalEvents+')',
+        '올퍼펙트 '+(completed.length?round(allPerfect/completed.length*100,2)+'%':'미측정')+' ('+allPerfect+'/'+completed.length+')',
+        '게임 랩타임 '+lap.length+'건 · 최단 '+(lap.length?Math.min(...lap).toFixed(3)+'초':'미확인'),''];
+      if(latest){
+        lines.push('최근: '+latest.timeKst+' · '+latest.courseName,'차량 '+(latest.vehicle?.name||'미확인')+' / '+(latest.vehicle?.tire||'타이어 미확인'),
+          '기록 '+(latest.gameTiming?.recordedLapTimeSec??'미확인')+'초 / 입력 '+latest.events+'개','',
+          '구간 소요시간 (판정 메시지 관측 기준, 공식 스플릿 아님)');
+        for(const sec of latest.timingSections?.fromFeedback||[])lines.push('  '+sec.name+': '+sec.durationSec+'초 / 누적 '+round(sec.toMs/1000)+'초');
+        lines.push('','브레이크 기준 구간');
+        for(const sec of latest.timingSections?.fromBrake||[])lines.push('  '+sec.name+': '+sec.durationSec+'초');
+        lines.push('','입력 타이밍 / 판정');
+        for(const h of latest.history||[])lines.push('  #'+h.sequence+' '+names[h.type]+' @'+round(h.timeSinceStartMs/1000)+'초 · '+(h.feedbackGrade||'미판정')+
+          (h.feedbackDirection?' '+h.feedbackDirection:'')+
+          (h.heldDurationMs!==null?' · 유지 '+h.heldDurationMs+'ms':'')+
+          (h.distanceToReferencePx!==null?' · 기준선 '+h.distanceToReferencePx+'px':''));
+        lines.push('','※ 기준선 거리는 AUTO 설정선 대비 관측값이며 실제 게임 판정선의 정밀 오차를 뜻하지 않습니다.');
+      }
+      q('#du-report-body').textContent=lines.join('\n');
+      view='report';render();position();
+    }catch(e){say('수동 분석 조회 실패: '+String(e?.message||e));}
+  }
+  analysisBtn.onclick=report;
+  exportBtn.onclick=async()=>{
+    try{const runs=(await allSavedRuns()).filter(r=>r.runSource==='MANUAL');
+      if(window.__duUnsavedManualRun&&!runs.some(x=>x.runId===window.__duUnsavedManualRun.runId))runs.push(window.__duUnsavedManualRun);
+      downloadRunBackup(runs);say('수동 주행 '+runs.length+'건 JSON 백업');}
+    catch(e){say('수동 백업 실패: '+String(e?.message||e));}
+  };
+  function recoveredCheckpoint(){
+    try{
+      const raw=localStorage.getItem(CHECKPOINT);if(!raw)return;
+      const old=JSON.parse(raw);if(!old?.runId||old.runSource!=='MANUAL')return;
+      const result={runId:old.runId,runSource:'MANUAL',mode:'manual',version:old.version,
+        time:old.time,timeKst:old.timeKst,timeZone:'Asia/Seoul',courseId:old.courseId,courseName:old.courseName,
+        vehicle:old.vehicle,complete:false,reason:'abandoned-checkpoint',
+        events:old.history?.length||0,grades:{},history:old.history||[],controlActions:old.controlActions||[],
+        feedbackLog:old.feedbackLog||[],segmentResults:old.segmentResults||[],
+        speedSamples:old.speedSamples||[],gameTiming:{recordedLapTimeSec:null},completionEvidence:{recoveredCheckpoint:true}};
+      window.__duRunArchive?.put(result).then(()=>{if(localStorage.getItem(CHECKPOINT)===raw)localStorage.removeItem(CHECKPOINT);cloudUploader.retry();})
+        .catch(()=>{window.__duUnsavedManualRun=result;});
+    }catch(e){console.warn('[Manual Telemetry] checkpoint recovery skipped:',String(e));}
+  }
+  recoveredCheckpoint();
+  raf=requestAnimationFrame(tick);
+  return {version:VERSION,state:()=>({status:lastStatus,error:lastError,active:!!session,lastSavedRunId:lastSaved?.runId||null}),
+    destroy:()=>{disposed=true;if(raf!==null)cancelAnimationFrame(raf);if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])doc.removeEventListener(ev,onControl,true);
+      fbObserver?.disconnect();statusNode.remove();analysisBtn.remove();exportBtn.remove();}};
+})();
+
+window.__dopamineUnifiedControl={active:true,destroy:()=>{clearInterval(timer);manualTelemetry.destroy();cloudUploader.destroy();box.remove();window.__dopamineUnifiedControl=null;}};
 render();position();
 
 })();
