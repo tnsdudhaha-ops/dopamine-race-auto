@@ -1,6 +1,6 @@
 // Dopamine Unified UI runtime — loaded from pinned GitHub commit by the stable bootstrap.
 // This file is not a userscript. The bootstrap provides page window and GM upload functions.
-// UI revision: passive MANUAL timing/segment telemetry + guarded Firefox manual start release recovery; AUTO engine and bootstrap unchanged.
+// UI revision: manual-recorder 0.1.2 with Android Firefox pointer capture, cross-window release telemetry and guarded start backup; AUTO unchanged.
 (function () {
 'use strict';
 if(window.__dopamineUnifiedControl?.active)return;
@@ -391,7 +391,7 @@ const timer=setInterval(()=>{render();position();},750);
 // Passive MANUAL telemetry: no synthetic game input, no change to AUTO prediction.
 const manualTelemetry=(()=>{
   'use strict';
-  const VERSION='0.1.1',CHECKPOINT='dopamine-manual:checkpoint-v1';
+  const VERSION='0.1.2',CHECKPOINT='dopamine-manual:checkpoint-v1';
   const FINISH=/^(finished|finish|complete|completed|result|results|ended|end|done)$/;
   const ACTIVE=/^(running|racing|playing|active|in-progress)$/;
   const STOPPED=/^(interrupted|aborted|canceled|cancelled|failed|stopped|quit)$/;
@@ -407,60 +407,119 @@ const manualTelemetry=(()=>{
   const analysisBtn=document.createElement('button'),exportBtn=document.createElement('button');
   analysisBtn.textContent='✋ 수동 주행 분석';exportBtn.textContent='💾 수동 기록 백업';
   q('#du-advanced .grid').append(analysisBtn,exportBtn);
-  // Firefox/Android manual start assist: observe trusted input, never replace AUTO driving.
-  // A single synthetic pointerup is allowed only if a real release was observed,
-  // all five red lights were observed during that hold, and the game stayed at 0.
+  // Android Firefox: trusted manual touch release may be lost/retargeted by iframe.
+  // Fix the gesture surface before touch starts, capture the pointer where possible,
+  // observe real releases at frame/window and outer document, and only then consider
+  // one synthetic pointerup if the game stays stationary after all five lights.
   const FIREFOX_START_KEY='dopamine-manual:firefox-start-assist-v1';
   const firefoxAndroid=/Android/i.test(navigator.userAgent||'')&&/Firefox\//i.test(navigator.userAgent||'');
   let firefoxAssist=firefoxAndroid,firefoxHeld=null,firefoxSawFive=false,firefoxRecoveryTimer=null;
-  let firefoxRecoveryCount=0,firefoxReleaseCount=0,firefoxToken=0;
+  let firefoxRecoveryCount=0,firefoxReleaseCount=0,firefoxToken=0,firefoxLastRed=-1,firefoxLastSawFive=false;
+  let firefoxSurface=null,firefoxOriginalTouchAction=null,firefoxOriginalPriority='';
   const firefoxEvents=[];
   try{const option=localStorage.getItem(FIREFOX_START_KEY);if(option!==null)firefoxAssist=option==='on';}catch(_){}
   const firefoxToggle=document.createElement('button'),firefoxDiagnostic=document.createElement('button');
-  const firefoxGrid=q('#du-advanced .grid');
-  firefoxGrid.append(firefoxToggle,firefoxDiagnostic);
+  q('#du-advanced .grid').append(firefoxToggle,firefoxDiagnostic);
   function firefoxToggleLabel(){firefoxToggle.textContent='🛠 수동 출발 보완: '+(firefoxAssist?'ON':'OFF');}
   firefoxToggleLabel();firefoxDiagnostic.textContent='📋 수동 출발 진단 복사';
   function firefoxLog(kind,e=null,extra={}){
     firefoxEvents.push({atMs:round(now(),1),kind,domEvent:e?.type||null,
       brakeTarget:!!e?.target?.closest?.('.cursor-interaction'),phase:phase(),...extra});
-    if(firefoxEvents.length>80)firefoxEvents.shift();
+    if(firefoxEvents.length>100)firefoxEvents.shift();
   }
-  function firefoxReset(){
+  function firefoxPrepareSurface(){
+    const eligible=firefoxAndroid&&firefoxAssist&&!getA().running&&!getA().chainEnabled;
+    const target=eligible?doc?.querySelector('.cursor-interaction'):null;
+    if(firefoxSurface&&(!eligible||target!==firefoxSurface)){
+      try{
+        if(firefoxOriginalTouchAction)firefoxSurface.style.setProperty('touch-action',firefoxOriginalTouchAction,firefoxOriginalPriority);
+        else firefoxSurface.style.removeProperty('touch-action');
+      }catch(_){}
+      firefoxSurface=null;firefoxOriginalTouchAction=null;firefoxOriginalPriority='';
+    }
+    if(target&&target!==firefoxSurface){
+      try{
+        firefoxOriginalTouchAction=target.style.getPropertyValue('touch-action');
+        firefoxOriginalPriority=target.style.getPropertyPriority('touch-action');
+        target.style.setProperty('touch-action','none','important');
+        firefoxSurface=target;
+        firefoxLog('touch-action-protected');
+      }catch(err){firefoxLog('touch-action-error',null,{detail:String(err?.message||err).slice(0,90)});}
+    }
+  }
+  function firefoxReset(reason='reset'){
     firefoxToken++;
     if(firefoxRecoveryTimer!==null){clearTimeout(firefoxRecoveryTimer);firefoxRecoveryTimer=null;}
+    if(firefoxHeld)firefoxLog('held-reset',null,{reason,heldForMs:round(now()-firefoxHeld.at),sawFive:firefoxSawFive});
     firefoxHeld=null;firefoxSawFive=false;
   }
-  function firefoxObserve(e){
-    if(!firefoxAndroid||!e.isTrusted||getA().running||getA().chainEnabled||!/^(ready|running|racing|playing|active|in-progress)$/.test(phase()))return;
-    const brakeTarget=e.target?.closest?.('.cursor-interaction');
-    if(e.type==='pointerdown'&&brakeTarget){
-      firefoxReset();firefoxHeld={id:e.pointerId,at:now()};
-      firefoxLog('trusted-brake-down',e,{pointerId:e.pointerId});return;
+  function firefoxObserveLights(){
+    if(!firefoxAndroid||!firefoxHeld)return;
+    const red=countRed();
+    if(red!==firefoxLastRed){firefoxLastRed=red;firefoxLog('red-light-count',null,{red});}
+    if(red===5&&!firefoxSawFive){
+      firefoxSawFive=true;firefoxLastSawFive=true;
+      firefoxLog('five-red-lights-seen');
+    }
+  }
+  function firefoxObserve(e,scope='iframe-document'){
+    if(!firefoxAndroid||!e.isTrusted||getA().running||getA().chainEnabled)return;
+    const type=e.type,brakeTarget=e.target?.closest?.('.cursor-interaction');
+    if(type==='pointerdown'&&brakeTarget&&phase()==='ready'){
+      firefoxReset('new-brake-down');
+      firefoxHeld={id:e.pointerId,at:now(),touchIdentifier:null,cancelSeen:false};
+      firefoxLastRed=-1;firefoxLastSawFive=false;
+      firefoxLog('trusted-brake-down',e,{scope,pointerId:e.pointerId});
+      if(firefoxAssist){
+        try{
+          if(typeof brakeTarget.setPointerCapture==='function'){
+            brakeTarget.setPointerCapture(e.pointerId);
+            firefoxLog('pointer-capture-requested',e,{pointerId:e.pointerId});
+          }else firefoxLog('pointer-capture-not-supported');
+        }catch(err){firefoxLog('pointer-capture-error',e,{detail:String(err?.message||err).slice(0,90)});}
+      }
+      firefoxObserveLights();
+      return;
     }
     if(!firefoxHeld)return;
-    if(e.type==='pointerup'||e.type==='pointercancel'){
-      if(firefoxHeld.id!==undefined&&e.pointerId!==firefoxHeld.id)return;
-    }else if(e.type!=='touchend'&&e.type!=='touchcancel')return;
-    // A touchend following pointerup is ignored after the held state clears.
-    const sawFive=firefoxSawFive,releaseId=e.pointerId??firefoxHeld.id;
+    if(type==='touchstart'){
+      const changed=e.changedTouches;
+      if(changed?.length===1&&firefoxHeld.touchIdentifier===null)
+        firefoxHeld.touchIdentifier=changed[0].identifier;
+      return;
+    }
+    const pointerEnd=type==='pointerup'||type==='pointercancel';
+    const touchEnd=type==='touchend'||type==='touchcancel';
+    if(!pointerEnd&&!touchEnd)return;
+    if(pointerEnd&&e.pointerId!==firefoxHeld.id)return;
+    if(touchEnd&&firefoxHeld.touchIdentifier!==null&&e.changedTouches?.length){
+      if(!Array.from(e.changedTouches).some(t=>t.identifier===firefoxHeld.touchIdentifier))return;
+    }
+    firefoxObserveLights();
+    if(type==='pointercancel'||type==='touchcancel'){
+      firefoxHeld.cancelSeen=true;
+      firefoxLog('trusted-cancel-no-release-inferred',e,{scope,pointerId:firefoxHeld.id,sawFive:firefoxSawFive});
+      return; // cancellation alone does not establish that the finger was lifted
+    }
+    const sawFive=firefoxSawFive,releaseId=firefoxHeld.id;
     firefoxHeld=null;firefoxReleaseCount++;
-    firefoxLog('trusted-brake-release',e,{pointerId:releaseId,sawFive});
+    firefoxLog('trusted-brake-release',e,{scope,pointerId:releaseId,sawFive});
     if(!firefoxAssist||!sawFive)return;
     const token=++firefoxToken;
-    // Let the original trusted release reach the game's handlers first.
+    // Never substitute an assumed release for an unobserved physical release.
+    // The original trusted event is delivered before the delayed backup.
     firefoxRecoveryTimer=setTimeout(()=>{
       firefoxRecoveryTimer=null;
       if(disposed||token!==firefoxToken||!firefoxAssist||getA().running||getA().chainEnabled)return;
-      if(!doc||!trackRoot?.isConnected||!/^(ready|running|racing|playing|active|in-progress)$/.test(phase()))return;
+      if(!doc||!trackRoot?.isConnected||!/^(ready|running|racing|playing|active|in-progress|countdown|starting)$/.test(phase()))return;
       const red=countRed();
-      if(red!==0){firefoxLog('release-accepted-or-lights-reset',null,{red});return;}
+      if(red!==0){firefoxLog('backup-skipped-lights',null,{red});return;}
       const speed=readSpeed(),clock=readClock();
       if((Number.isFinite(speed)&&speed>0.5)||(Number.isFinite(clock)&&clock>0)){
-        firefoxLog('moving-no-recovery',null,{speed,clock});return;
+        firefoxLog('backup-skipped-moving',null,{speed,clock});return;
       }
       const brake=doc.querySelector('.cursor-interaction'),w=doc.defaultView;
-      if(!brake||!w?.PointerEvent){firefoxLog('no-pointer-target');return;}
+      if(!brake||!w?.PointerEvent){firefoxLog('backup-skipped-target-missing');return;}
       try{
         brake.dispatchEvent(new w.PointerEvent('pointerup',{
           bubbles:true,cancelable:true,pointerId:Number.isFinite(releaseId)?releaseId:1,
@@ -468,19 +527,30 @@ const manualTelemetry=(()=>{
         }));
         firefoxRecoveryCount++;
         firefoxLog('fallback-pointerup-sent',null,{red,speed,clock});
-      }catch(err){firefoxLog('fallback-error',null,{message:String(err?.message||err).slice(0,90)});}
+      }catch(err){firefoxLog('fallback-error',null,{detail:String(err?.message||err).slice(0,90)});}
     },70);
+  }
+  function firefoxFrameRelease(e){firefoxObserve(e,'iframe-window');}
+  function firefoxOuterRelease(e){firefoxObserve(e,'outer-document-or-window');}
+  const firefoxReleaseTypes=['pointerup','pointercancel','touchend','touchcancel'];
+  if(firefoxAndroid){
+    for(const type of firefoxReleaseTypes){
+      document.addEventListener(type,firefoxOuterRelease,true);
+      window.addEventListener(type,firefoxOuterRelease,true);
+    }
   }
   firefoxToggle.onclick=()=>{
     firefoxAssist=!firefoxAssist;
-    if(!firefoxAssist)firefoxReset();
+    if(!firefoxAssist)firefoxReset('user-disabled');
     try{localStorage.setItem(FIREFOX_START_KEY,firefoxAssist?'on':'off');}catch(_){}
-    firefoxToggleLabel();say('Firefox 수동 출발 보완 '+(firefoxAssist?'켜짐':'꺼짐'));
+    firefoxPrepareSurface();firefoxToggleLabel();
+    say('Firefox 수동 출발 보완 '+(firefoxAssist?'켜짐':'꺼짐'));
   };
   firefoxDiagnostic.onclick=async()=>{
     const safe={checkedAt:new Date().toISOString(),platform:'Android Firefox',
       supported:firefoxAndroid,assistEnabled:firefoxAssist,
-      gamePhase:phase(),redLights:countRed(),held:!!firefoxHeld,sawFive:firefoxSawFive,
+      gamePhase:phase(),redLights:countRed(),held:!!firefoxHeld,
+      sawFive:firefoxSawFive,lastHoldSawFive:firefoxLastSawFive,lastObservedRed:firefoxLastRed,
       physicalReleases:firefoxReleaseCount,syntheticRecoveries:firefoxRecoveryCount,
       events:firefoxEvents};
     try{await navigator.clipboard.writeText(JSON.stringify(safe,null,2));say('수동 출발 진단 복사 완료');}
@@ -787,11 +857,15 @@ const manualTelemetry=(()=>{
     if(doc===next)return;
     if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])
       doc.removeEventListener(ev,onControl,true);
+    if(doc?.defaultView)for(const ev of firefoxReleaseTypes)doc.defaultView.removeEventListener(ev,firefoxFrameRelease,true);
     fbObserver?.disconnect();fbObserver=null;fbElement=null;
-    firefoxReset();
+    firefoxReset('iframe-replaced');
+    firefoxPrepareSurface();
     doc=next;trackRoot=doc?.querySelector('#pedallap')||null;
     if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])
       doc.addEventListener(ev,onControl,{capture:true,passive:true});
+    if(firefoxAndroid&&doc?.defaultView)for(const ev of firefoxReleaseTypes)doc.defaultView.addEventListener(ev,firefoxFrameRelease,true);
+    firefoxPrepareSurface();
     previousPhase='';redSeen=false;lastFrame=0;lastPosition={};pending=[];
     if(!session)status(doc?'주행 준비 · 자동 관찰':'타임어택 화면 대기');
   }
@@ -810,6 +884,12 @@ const manualTelemetry=(()=>{
     if(!doc)return;
     if(!trackRoot?.isConnected){trackRoot=doc.querySelector('#pedallap');if(!trackRoot)return;}
     const p=phase();
+    if(firefoxAndroid){
+      firefoxPrepareSurface();
+      if(firefoxHeld&&at-lastLightPoll>=15){lastLightPoll=at;firefoxObserveLights();}
+      if(/^(interrupted|aborted|canceled|cancelled|failed|stopped|quit)$/.test(p)&&firefoxHeld)
+        firefoxReset('game-interrupted');
+    }
     if(!session){
       if(p==='ready'&&at-lastLightPoll>=35){
         lastLightPoll=at;
@@ -921,7 +1001,9 @@ const manualTelemetry=(()=>{
   recoveredCheckpoint();
   raf=requestAnimationFrame(tick);
   return {version:VERSION,state:()=>({status:lastStatus,error:lastError,active:!!session,lastSavedRunId:lastSaved?.runId||null,firefoxStartAssist:firefoxAssist,firefoxStartRecoveries:firefoxRecoveryCount}),
-    destroy:()=>{disposed=true;firefoxReset();firefoxToggle.remove();firefoxDiagnostic.remove();if(raf!==null)cancelAnimationFrame(raf);if(slowTimer!==null)clearTimeout(slowTimer);if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])doc.removeEventListener(ev,onControl,true);
+    destroy:()=>{disposed=true;firefoxReset('destroy');firefoxAssist=false;firefoxPrepareSurface();firefoxToggle.remove();firefoxDiagnostic.remove();
+      if(firefoxAndroid)for(const ev of firefoxReleaseTypes){document.removeEventListener(ev,firefoxOuterRelease,true);window.removeEventListener(ev,firefoxOuterRelease,true);}
+      if(doc?.defaultView)for(const ev of firefoxReleaseTypes)doc.defaultView.removeEventListener(ev,firefoxFrameRelease,true);if(raf!==null)cancelAnimationFrame(raf);if(slowTimer!==null)clearTimeout(slowTimer);if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])doc.removeEventListener(ev,onControl,true);
       fbObserver?.disconnect();statusNode.remove();analysisBtn.remove();exportBtn.remove();}};
 })();
 
