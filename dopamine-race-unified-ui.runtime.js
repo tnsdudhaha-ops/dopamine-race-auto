@@ -414,7 +414,7 @@ const manualTelemetry=(()=>{
   const FIREFOX_START_KEY='dopamine-manual:firefox-start-assist-v1';
   const firefoxAndroid=/Android/i.test(navigator.userAgent||'')&&/Firefox\//i.test(navigator.userAgent||'');
   let firefoxAssist=firefoxAndroid,firefoxHeld=null,firefoxSawFive=false,firefoxRecoveryTimer=null;
-  let firefoxRecoveryCount=0,firefoxReleaseCount=0,firefoxToken=0,firefoxLastRed=-1,firefoxLastSawFive=false;
+  let firefoxRecoveryCount=0,firefoxReleaseCount=0,firefoxToken=0,firefoxLastRed=-1,firefoxLastSawFive=false,lastFirefoxLightPoll=0;
   let firefoxSurface=null,firefoxOriginalTouchAction=null,firefoxOriginalPriority='';
   const firefoxEvents=[];
   try{const option=localStorage.getItem(FIREFOX_START_KEY);if(option!==null)firefoxAssist=option==='on';}catch(_){}
@@ -866,7 +866,7 @@ const manualTelemetry=(()=>{
       doc.addEventListener(ev,onControl,{capture:true,passive:true});
     if(firefoxAndroid&&doc?.defaultView)for(const ev of firefoxReleaseTypes)doc.defaultView.addEventListener(ev,firefoxFrameRelease,true);
     firefoxPrepareSurface();
-    previousPhase='';redSeen=false;lastFrame=0;lastPosition={};pending=[];
+    previousPhase='';redSeen=false;lastFrame=0;lastPosition={};pending=[];lastFirefoxLightPoll=0;
     if(!session)status(doc?'주행 준비 · 자동 관찰':'타임어택 화면 대기');
   }
   let disposed=false,raf=null,slowTimer=null;
@@ -886,7 +886,7 @@ const manualTelemetry=(()=>{
     const p=phase();
     if(firefoxAndroid){
       firefoxPrepareSurface();
-      if(firefoxHeld&&at-lastLightPoll>=15){lastLightPoll=at;firefoxObserveLights();}
+      if(firefoxHeld&&at-lastFirefoxLightPoll>=15){lastFirefoxLightPoll=at;firefoxObserveLights();}
       if(/^(interrupted|aborted|canceled|cancelled|failed|stopped|quit)$/.test(p)&&firefoxHeld)
         firefoxReset('game-interrupted');
     }
