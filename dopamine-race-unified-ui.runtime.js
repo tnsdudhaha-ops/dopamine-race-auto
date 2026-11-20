@@ -807,7 +807,12 @@ const manualTelemetry=(()=>{
         events:old.history?.length||0,grades:{},history:old.history||[],controlActions:old.controlActions||[],
         feedbackLog:old.feedbackLog||[],segmentResults:old.segmentResults||[],
         speedSamples:old.speedSamples||[],gameTiming:{recordedLapTimeSec:null},completionEvidence:{recoveredCheckpoint:true}};
-      window.__duRunArchive?.put(result).then(()=>{if(localStorage.getItem(CHECKPOINT)===raw)localStorage.removeItem(CHECKPOINT);cloudUploader.retry();})
+      Promise.resolve(window.__duRunArchive?.all?.()).then(async existing=>{
+        if(!Array.isArray(existing))throw Error('기존 원본 검증 불가');
+        if(!existing.some(x=>x.runId===result.runId))await window.__duRunArchive.put(result);
+        if(localStorage.getItem(CHECKPOINT)===raw)localStorage.removeItem(CHECKPOINT);
+        cloudUploader.retry();
+      })
         .catch(()=>{window.__duUnsavedManualRun=result;});
     }catch(e){console.warn('[Manual Telemetry] checkpoint recovery skipped:',String(e));}
   }
