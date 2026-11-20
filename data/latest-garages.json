@@ -1,15 +1,15 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-19T07:52:23.310Z",
-  "generatedAtKst": "2026-11-19T16:52:23.310+09:00",
+  "generatedAt": "2026-11-20T01:59:04.304Z",
+  "generatedAtKst": "2026-11-20T10:59:04.304+09:00",
   "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0.3",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-19T07:52:15.709Z",
-      "updatedAtKst": "2026-11-19T16:52:15.709+09:00",
+      "updatedAt": "2026-11-20T01:58:55.785Z",
+      "updatedAtKst": "2026-11-20T10:58:55.785+09:00",
       "modelCount": 12,
       "vehicleCount": 15,
       "vehicles": [
@@ -66,13 +66,6 @@
         },
         {
           "grade": "S",
-          "model": "현대 싼타페",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "S",
           "model": "현대 쏘나타",
           "maxStars": 3,
           "quantity": 1,
@@ -114,13 +107,20 @@
               "qty": 2
             }
           ]
+        },
+        {
+          "grade": "R",
+          "model": "두산 굴삭기",
+          "maxStars": 3,
+          "quantity": 1,
+          "starBreakdown": []
         }
       ]
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-19T07:52:17.287Z",
-      "updatedAtKst": "2026-11-19T16:52:17.287+09:00",
+      "updatedAt": "2026-11-20T01:58:57.622Z",
+      "updatedAtKst": "2026-11-20T10:58:57.622+09:00",
       "modelCount": 16,
       "vehicleCount": 16,
       "vehicles": [
@@ -240,8 +240,8 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-19T07:52:18.666Z",
-      "updatedAtKst": "2026-11-19T16:52:18.666+09:00",
+      "updatedAt": "2026-11-20T01:58:59.152Z",
+      "updatedAtKst": "2026-11-20T10:58:59.152+09:00",
       "modelCount": 13,
       "vehicleCount": 13,
       "vehicles": [
@@ -340,8 +340,8 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-19T07:52:20.115Z",
-      "updatedAtKst": "2026-11-19T16:52:20.115+09:00",
+      "updatedAt": "2026-11-20T01:59:00.777Z",
+      "updatedAtKst": "2026-11-20T10:59:00.777+09:00",
       "modelCount": 14,
       "vehicleCount": 14,
       "vehicles": [
@@ -447,8 +447,8 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-19T07:52:21.514Z",
-      "updatedAtKst": "2026-11-19T16:52:21.514+09:00",
+      "updatedAt": "2026-11-20T01:59:02.595Z",
+      "updatedAtKst": "2026-11-20T10:59:02.595+09:00",
       "modelCount": 7,
       "vehicleCount": 7,
       "vehicles": [
@@ -505,10 +505,10 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-19T07:52:22.956Z",
-      "updatedAtKst": "2026-11-19T16:52:22.956+09:00",
-      "modelCount": 8,
-      "vehicleCount": 8,
+      "updatedAt": "2026-11-20T01:59:03.946Z",
+      "updatedAtKst": "2026-11-20T10:59:03.946+09:00",
+      "modelCount": 6,
+      "vehicleCount": 6,
       "vehicles": [
         {
           "grade": "SSR",
@@ -528,20 +528,6 @@
           "grade": "S",
           "model": "토요타 GR86",
           "maxStars": 5,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "S",
-          "model": "현대 싼타페",
-          "maxStars": 3,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "S",
-          "model": "현대 쏘나타",
-          "maxStars": 3,
           "quantity": 1,
           "starBreakdown": []
         },
