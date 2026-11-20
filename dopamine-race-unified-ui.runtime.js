@@ -432,7 +432,7 @@ const manualTelemetry=(()=>{
     firefoxHeld=null;firefoxSawFive=false;
   }
   function firefoxObserve(e){
-    if(!firefoxAndroid||!e.isTrusted||getA().running||getA().chainEnabled||phase()!=='ready')return;
+    if(!firefoxAndroid||!e.isTrusted||getA().running||getA().chainEnabled||!/^(ready|running|racing|playing|active|in-progress)$/.test(phase()))return;
     const brakeTarget=e.target?.closest?.('.cursor-interaction');
     if(e.type==='pointerdown'&&brakeTarget){
       firefoxReset();firefoxHeld={id:e.pointerId,at:now()};
@@ -452,7 +452,7 @@ const manualTelemetry=(()=>{
     firefoxRecoveryTimer=setTimeout(()=>{
       firefoxRecoveryTimer=null;
       if(disposed||token!==firefoxToken||!firefoxAssist||getA().running||getA().chainEnabled)return;
-      if(!doc||!trackRoot?.isConnected||phase()!=='ready')return;
+      if(!doc||!trackRoot?.isConnected||!/^(ready|running|racing|playing|active|in-progress)$/.test(phase()))return;
       const red=countRed();
       if(red!==0){firefoxLog('release-accepted-or-lights-reset',null,{red});return;}
       const speed=readSpeed(),clock=readClock();
