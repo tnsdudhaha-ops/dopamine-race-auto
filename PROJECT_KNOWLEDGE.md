@@ -102,11 +102,11 @@
 | Release 1.0 | v3.2.8 | 최초 동결 기준 |
 | Release 2.0 | v3.3.3 | 검증된 주행 알고리즘의 기준선 |
 | Release 3.0 | v3.3.10 | 사용자가 지정한 현행 Release 라벨/기준선 |
-| 개발 엔진 | **v3.3.35** | 2026-11-21 현재 버전. Android Firefox 수동 출발 보완(manual-recorder v0.1.1)을 AUTO 표시 버전에 동기화; 엔진 예측식·상수 불변. Release 3.0 유지 |
+| 개발 엔진 | **v3.3.36** | 2026-11-21 현재 버전. Android Firefox 수동 브레이크 해제 누락 진단 및 보완(manual-recorder v0.1.2), 엔진 예측식·상수 불변. Release 3.0 유지 |
 | 통합 부트스트랩 | **v1.1.0 (고정)** | GitHub 최신 AUTO / 차고 런타임 / 통합 UI를 동일 커밋에서 직접 다운로드 |
 
 - 고속 선행 예측은 과거 v3.3.5 계열 검증 공식을 보존한 상태로 후속 기능을 추가했다. 현행 `predict()`의 구현값이 최종 실제 근거다.
-- `Release 3.0`은 고정 기준선이고 개발 엔진 `@version`은 별도로 증가한다. 현재 `@version 3.3.35`.
+- `Release 3.0`은 고정 기준선이고 개발 엔진 `@version`은 별도로 증가한다. 현재 `@version 3.3.36`.
 - 배포·검증은 사용자의 Android Firefox + Tampermonkey 중심. GitHub 최신 커밋 SHA 기반 런타임 로드를 실행 시 사용 (Tampermonkey의 주기적 업데이트 기능에 비의존).
 - 통합 스크립트와 독립 스크립트를 동시에 활성화하여 중복 입력이 발생하지 않도록 한다.
 **[사용자 추가 확정: 2026-11-21]** 기능을 아주 조금이라도 추가·수정·개선한 경우 **전역 AUTO 개발 버전 `v3.3.x`를 반드시 1단계 증가**한다. AUTO 엔진뿐 아니라 수동 기록기·통합 UI·차고 분석기 등 통합 시스템의 기능 변경도 대상이다. `dopamine-race-auto.user.js`의 **Tampermonkey `@version`과 런타임 `VERSION`을 함께 변경**해 화면·로그에서 새 버전이 보이게 하고, 기능별 자체 버전과 변경 파일/커밋을 기록한다. 단순 조사·원본 데이터 조회·주행 분석·문서 정리처럼 **실제 기능 코드 변경이 없는 작업은 번호를 올리지 않는다**. `dopamine-race-unified.user.js` 고정 부트스트랩 v1.1.0과 Release 1.0/2.0/3.0 기준선은 이 정책으로 변경하지 않는다. **매 기능 변경은 별도 개발 번호를 사용**하며, 같은 기능의 한 번의 구현·검증 과정에서 생긴 후속 보완 커밋은 같은 버전으로 관리할 수 있다.
@@ -787,3 +787,13 @@
 - **[사용자 확정]** 작은 기능 변경도 전역 AUTO 개발 버전을 1단계 올리고, 화면에 구버전이 남지 않도록 관리. 위 3장 정책에 반영. 자동 Release 승격은 하지 않는다.
 - **[GitHub 확인]** Firefox 수동 출발 보완은 바로 전 기능 변경이므로 누락된 AUTO 개발 번호를 **v3.3.34 → v3.3.35**로 정정. AUTO 엔진의 `// @version` 및 `const VERSION` **두 곳만** 수정. 커밋 `34d3e882f5724a4669bcb0441beb7726c7912b35`, 새 AUTO blob SHA `20fc38b980b4aa47e553b9ad2e77528d98e9b532`.
 - **[동결 확인]** 실제 주행 예측·입력 함수·엔진 상수·주행 중단 로직의 본문을 바꾸지 않았다. 이전 문서에 나온 v3.3.34 엔진 blob SHA는 **변경 이전 기록**이며 이 날짜 이후 현재 SHA가 아니다. 고정 통합 부트스트랩 v1.1.0 및 수동 기록기 자체 버전 v0.1.1 유지. Android Firefox 수동 출발 실제 성공은 별도 사용자 실주행 검증 전까지 미확인.
+
+
+### 2026-11-21 08:37 KST · 수동 출발 해제 로그 원본 확인 및 v3.3.36 수정
+
+- **[사용자 제공 원본 진단]** `checkedAt=2026-11-20T23:37:56.642Z` = **2026-11-21 08:37:56 KST**. Android Firefox `supported:true`, `assistEnabled:true`, `gamePhase:interrupted`, `redLights:0`, `held:false`, `sawFive:false`, `physicalReleases:0`, `syntheticRecoveries:0`. 이벤트 단 1건: `atMs:17493`, `trusted-brake-down`, `domEvent:pointerdown`, `brakeTarget:true`, `phase:ready`, `pointerId:0`. **[확인] 기록기는 눌림을 받았지만 물리적인 해제 이벤트를 관찰하지 못했고, 기존 조건부 가상 해제 신호는 한 번도 발송되지 않음.** [미확정] 브라우저가 해제 이벤트를 생성하지 않았는지, 버튼/iframe 밖으로 보냈는지, 게임이 이를 처리하지 못했는지는 기존 로그만으로 판별 불가. `sawFive:false`도 게임 신호등이 켜지지 않았다는 확정 증거가 아님.
+- **[소스 버그 확인]** manual-recorder v0.1.1은 Firefox 보완 입력을 iframe `document`의 trusted 브레이크 이벤트에서만 수집하고, 빨간불 5개 상태를 `phase==='ready'`일 때만 약 35ms 간격으로 확인함. 게임 phase가 준비 중 바뀌거나 Firefox가 해제 이벤트를 버튼/iframe 외부에 전달하면 `physicalReleases=0` 또는 `sawFive=false`가 생길 수 있다. 실제 어떤 경로에서 최초 누락됐는지는 실게임 소스·새 진단 전까지 가설 유지.
+- **[GitHub 구현]** `dopamine-race-unified-ui.runtime.js` 수동 기록기 **v0.1.2**. 브레이크 요소에 Android Firefox·보완 ON에서 `touch-action:none`을 터치 시작 전에 설정하고 종료/비활성 시 원상 복구; trusted `pointerdown`에서 해당 요소의 `setPointerCapture(pointerId)`를 **시도**하고 성공·실패를 기록. 동일 iframe의 window 및 바깥 document/window의 실제 `pointerup`·`touchend`도 관측하여, 버튼 밖으로 이동된 해제까지 원래 pointerId로 확인. `pointercancel`/ `touchcancel`만으로 손을 뗐다고 추정하지 않음. 사용자가 누르고 있는 동안 출발등 개수를 게임 phase와 별도 주기(15ms)로 관찰. `phase interrupted` 중 잔여 터치 상태를 취소. 부모 문서 이벤트 리스너·버튼 CSS·iframe 리스너는 해제 시 정리. 진단에 `scope`, 포인터 캡처 성공/오류, 신호등 변화, 마지막 다섯 점등 확인 여부를 추가. **실제 trusted 손 떼기가 확인된 뒤에만** 기존 70ms 후 조건부 가상 `pointerup` 1회 보완; 입력 미감지 시 강제 출발하지 않음. 커밋 `7dfafbaf129a517043b6b8ef615117744bc6240a`; 수동 기록기 출발 신호 주기 회귀 충돌 별도 수정 `2250b64bab36155030711ec880ff4effa8628dd4`.
+- **[사용자 확정 버전 규칙]** 전역 AUTO 엔진 표시·개발 버전 **v3.3.35 → v3.3.36**. `dopamine-race-auto.user.js` 내부 `@version`과 `VERSION` 두 문자열만 변경; 커밋 `1907fac5ae2ce876606c95bb8252cce984d8992c`, 새 blob SHA `73c23bd8c4cfd87c066d01a1914540cfa8649985`. AUTO 입력·예측 코드·`ENGINE` 상수 본문과 통합 부트스트랩 v1.1.0 유지. Release 1.0/2.0/3.0 고정.
+- **[모의 검증 완료]** 개발 source 전체 JS 구문 검사 및 Firefox 보완 함수의 mocked DOM 7개 시나리오 실행: (1) 버튼 밖으로 이동된 실제 pointerup → 보완 1회 및 pointerId=0 캡처 시도; (2) 해제 미감지 → 보완 0; (3) pointercancel만 감지 → 0; (4) 정상 출발 속도 상승 → 0; (5) 빨간불 5개 관찰 불가 → 0; (6) AUTO 실행 중 → 0; (7) 게임 interrupted 상태 → 0. 모두 통과. 사용자 Firefox 기기에서의 실제 브레이크 출발 성공·기록 저장·완주 재현성은 **미검증**.
+- **[실사용 확인 방법]** 통합 스크립트 ON → 게임 새로고침 → AUTO 표시 v3.3.36, `⚙ → 🛠 수동 출발 보완: ON` 확인 → 잔여 도전 횟수를 고려해 수동 출발 최대 1회 시험. 실패하면 `⚙ → 📋 수동 출발 진단 복사`를 공유. `pointer-capture-requested`, `red-light-count`, `five-red-lights-seen`, `trusted-brake-release`, `fallback-pointerup-sent`, `held-reset`로 누락 단계 확인. 실제 게임 화면에서 검증되기 전 자동 완치 주장 금지.
