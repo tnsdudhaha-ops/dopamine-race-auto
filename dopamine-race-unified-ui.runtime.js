@@ -512,8 +512,11 @@ const manualTelemetry=(()=>{
     const elapsed=round(at-session.startedAt,2);
     if(parsed.kind==='segment'){
       const prev=session.segmentResults.at(-1)?.timeMs||0;
+      const gameHud=readClock()??session.lastClock;
+      const previousHud=session.segmentResults.at(-1)?.gameHudSec??0;
       session.segmentResults.push({...parsed,timeMs:elapsed,elapsedSec:round(elapsed/1000),splitSec:round((elapsed-prev)/1000),
-        timingSource:'browser-feedback-observation-not-official-game-split'});
+        gameHudSec:gameHud,gameHudSplitSec:gameHud!==null&&gameHud>=previousHud?round(gameHud-previousHud):null,
+        timingSource:gameHud!==null?'game-hud-at-feedback-observation':'browser-feedback-observation-not-official-game-split'});
       return;
     }
     const candidates=session.history.filter(h=>h.type===parsed.type&&!h.feedbackGrade&&at-h.monotonicAt>=0&&at-h.monotonicAt<=1800);
@@ -586,7 +589,7 @@ const manualTelemetry=(()=>{
       referenceLineY:line,referenceLineSource:'AUTO-calibration-only-not-game-judgement',
       distanceToReferencePx:dist===null?null:round(dist,3),
       estimatedTimeToReferenceMs:dist!==null&&speed>0?round(dist/speed,2):null,
-      speedKmh:currentSpeed,averageFrameMs:round(frameAvg,2),
+      speedKmh:currentSpeed,gameHudAtInputSec:readClock()??session.lastClock,averageFrameMs:round(frameAvg,2),
       heldDurationMs:!item.down&&previousSame?round(item.at-previousSame.monotonicAt,2):null,
       frameTrace:{before:trace[type].slice(-8),after:[]},
       feedbackGrade:null,feedbackDirection:null,feedbackDistanceM:null,feedback:null,feedbackObservedMs:null};
@@ -602,21 +605,38 @@ const manualTelemetry=(()=>{
       localStorage.setItem(CHECKPOINT,JSON.stringify(snapshot));
     }catch(e){lastError='임시 저장 실패';}
   }
-  function elapsedSections(s,end){
-    const marks=s.segmentResults.map((x,i)=>({name:'판정 구간 '+(i+1),timeMs:x.timeMs}));
+  function elapsedSections(s,end,lap){
+    function stats(a,b){
+      const data=s.speedSamples.filter(x=>x.timeMs>=a&&x.timeMs<=b&&Number.isFinite(x.kmh)).map(x=>x.kmh);
+      const actions=s.history.filter(x=>x.timeSinceStartMs>=a&&x.timeSinceStartMs<=b);
+      return {avgSpeedKmh:data.length?round(data.reduce((n,v)=>n+v,0)/data.length,2):null,
+        maxSpeedKmh:data.length?Math.max(...data):null,speedSampleCount:data.length,
+        brakeOnCount:actions.filter(x=>x.type==='brakeOn').length,
+        brakeOffCount:actions.filter(x=>x.type==='brakeOff').length,
+        boostOnCount:actions.filter(x=>x.type==='boostOn').length,
+        boostOffCount:actions.filter(x=>x.type==='boostOff').length};
+    }
+    const marks=s.segmentResults.map((x,i)=>({name:'판정 구간 '+(i+1),timeMs:x.timeMs,gameHudSec:x.gameHudSec}));
     const split=[];let before=0;
     for(const m of marks){split.push({name:m.name,fromMs:round(before),toMs:round(m.timeMs),durationSec:round((m.timeMs-before)/1000),
-      source:'feedback-observation'});before=m.timeMs;}
+      source:'feedback-observation',...stats(before,m.timeMs)});before=m.timeMs;}
     if(Number.isFinite(end)&&end>before)split.push({name:'마지막 구간',fromMs:round(before),toMs:round(end),durationSec:round((end-before)/1000),
-      source:'feedback-to-finish-observation'});
+      source:'feedback-to-finish-observation',...stats(before,end)});
+    const gameHud=[],gameMarkers=[{name:'start',gameHudSec:0},...marks.filter(x=>Number.isFinite(x.gameHudSec))];
+    for(let i=1;i<gameMarkers.length;i++){const a=gameMarkers[i-1],b=gameMarkers[i];
+      if(b.gameHudSec>=a.gameHudSec)gameHud.push({name:b.name,fromSec:round(a.gameHudSec),toSec:round(b.gameHudSec),
+        durationSec:round(b.gameHudSec-a.gameHudSec),source:'hud-at-feedback-not-official-split'});}
+    const last=gameMarkers.at(-1);
+    if(Number.isFinite(lap)&&lap>last.gameHudSec)gameHud.push({name:'마지막 구간',fromSec:round(last.gameHudSec),toSec:round(lap),
+      durationSec:round(lap-last.gameHudSec),source:'hud-at-finish-may-include-penalty'});
     const brakes=s.history.filter(x=>x.type==='brakeOn'),byBrake=[],boundaries=[{timeSinceStartMs:0},...brakes];
     if(Number.isFinite(end))boundaries.push({timeSinceStartMs:end});
     for(let i=1;i<boundaries.length;i++){
       const a=boundaries[i-1].timeSinceStartMs,b=boundaries[i].timeSinceStartMs;
       if(b>a)byBrake.push({name:'브레이크 기준 '+i+'구간',fromMs:round(a),toMs:round(b),durationSec:round((b-a)/1000),
-        source:'brake-on-to-next-brake-on-proxy'});
+        source:'brake-on-to-next-brake-on-proxy',...stats(a,b)});
     }
-    return {fromFeedback:split,fromBrake:byBrake,officialSplitTimesAvailable:false};
+    return {fromFeedback:split,fromGameHud:gameHud,fromBrake:byBrake,officialSplitTimesAvailable:false};
   }
   async function finalize(reason,finished){
     const s=session;if(!s||s.saveRequested)return;
@@ -633,7 +653,7 @@ const manualTelemetry=(()=>{
       complete:!!finished,reason,events:s.history.length,grades,
       history:s.history.map(({monotonicAt,...record})=>record),controlActions:s.controlActions,
       feedbackLog:s.feedbackLog,segmentResults:s.segmentResults,
-      timingSections:elapsedSections(s,round(end-s.startedAt,2)),
+      timingSections:elapsedSections(s,round(end-s.startedAt,2),lap),
       gameTiming:{recordedLapTimeSec:lap,recordedLapTimeSource:finalResult!==null?'game-explicit-result':lap!==null?'game-hud-at-finish':null,
         recordedLapTimeStatus:finalResult!==null?'explicit-final-result':lap!==null?'hud-finish-observed-not-officially-verified':'not-detected',
         hudClockTrace:s.clockSamples},
@@ -735,8 +755,8 @@ const manualTelemetry=(()=>{
     try{
       const saved=await allSavedRuns(),manual=saved.filter(r=>r.runSource==='MANUAL');
       const completed=manual.filter(r=>r.complete),totalEvents=completed.reduce((n,r)=>n+(r.events||0),0);
-      const perfect=completed.reduce((n,r)=>n+(r.grades?.perfect||0),0);
-      const allPerfect=completed.filter(r=>r.events>0&&(r.grades?.perfect||0)===r.events&&r.completionEvidence?.ungradedInputs===0&&r.completionEvidence?.unmatchedFeedback===0).length;
+      const perfect=completed.reduce((n,r)=>n+(r.history||[]).filter(h=>h.feedbackGrade==='perfect').length,0);
+      const allPerfect=completed.filter(r=>r.events>0&&(r.history||[]).length===r.events&&(r.history||[]).every(h=>h.feedbackGrade==='perfect')&&r.completionEvidence?.unmatchedFeedback===0).length;
       const lap=completed.map(r=>r.gameTiming?.recordedLapTimeSec).filter(x=>Number.isFinite(x)&&x>0);
       const latest=lastSaved||manual.at(-1);
       const lines=['✋ MANUAL 정밀 분석 · 기록기 v'+VERSION,
@@ -745,12 +765,20 @@ const manualTelemetry=(()=>{
         '올퍼펙트 '+(completed.length?round(allPerfect/completed.length*100,2)+'%':'미측정')+' ('+allPerfect+'/'+completed.length+')',
         '게임 랩타임 '+lap.length+'건 · 최단 '+(lap.length?Math.min(...lap).toFixed(3)+'초':'미확인'),''];
       if(latest){
+        const comparable=manual.filter(x=>x.runId!==latest.runId&&x.complete&&x.courseName===latest.courseName&&
+          x.vehicle?.name===latest.vehicle?.name&&x.vehicle?.grade===latest.vehicle?.grade&&
+          x.vehicle?.stars===latest.vehicle?.stars&&x.vehicle?.tire===latest.vehicle?.tire);
+        const prev=comparable.at(-1),prevLap=prev?.gameTiming?.recordedLapTimeSec,lapNow=latest.gameTiming?.recordedLapTimeSec;
+        if(prev&&Number.isFinite(prevLap)&&Number.isFinite(lapNow))
+          lines.push('직전 동일 조건 대비 '+(round(lapNow-prevLap)>0?'+':'')+round(lapNow-prevLap)+'초 (비교 표본 1판)', '');
         lines.push('최근: '+latest.timeKst+' · '+latest.courseName,'차량 '+(latest.vehicle?.name||'미확인')+' / '+(latest.vehicle?.tire||'타이어 미확인'),
           '기록 '+(latest.gameTiming?.recordedLapTimeSec??'미확인')+'초 / 입력 '+latest.events+'개','',
           '구간 소요시간 (판정 메시지 관측 기준, 공식 스플릿 아님)');
         for(const sec of latest.timingSections?.fromFeedback||[])lines.push('  '+sec.name+': '+sec.durationSec+'초 / 누적 '+round(sec.toMs/1000)+'초');
+        lines.push('','게임 HUD로 관측한 구간시간 (공식 스플릿 아님)');
+        for(const sec of latest.timingSections?.fromGameHud||[])lines.push('  '+sec.name+': '+sec.durationSec+'초 / 누적 '+sec.toSec+'초');
         lines.push('','브레이크 기준 구간');
-        for(const sec of latest.timingSections?.fromBrake||[])lines.push('  '+sec.name+': '+sec.durationSec+'초');
+        for(const sec of latest.timingSections?.fromBrake||[])lines.push('  '+sec.name+': '+sec.durationSec+'초 / 평균속도 '+(sec.avgSpeedKmh??'미측정')+'km/h / 최대속도 '+(sec.maxSpeedKmh??'미측정')+'km/h');
         lines.push('','입력 타이밍 / 판정');
         for(const h of latest.history||[])lines.push('  #'+h.sequence+' '+names[h.type]+' @'+round(h.timeSinceStartMs/1000)+'초 · '+(h.feedbackGrade||'미판정')+
           (h.feedbackDirection?' '+h.feedbackDirection:'')+
