@@ -839,6 +839,7 @@ function scanBands(now){
   if(!canvas)return [];
   const x=Math.round(cfg.scanX),top=clamp(Math.floor(cfg.scanTop),0,canvas.height),
     bottom=clamp(Math.ceil(cfg.scanBottom),0,canvas.height);
+  if(x<0||x>=canvas.width||bottom<=top)return [];
   const primary=scanColumnBands(canvas,x,top,bottom);
   if(!boostHeld||boostExpected!=='boostOff'
     ||now-lastSideBoostScanAt<SIDE_BOOST_SCAN.scanIntervalMs)return primary;
@@ -993,8 +994,12 @@ function renderAnalysis(){
  const runs=readSavedRuns(),completed=runs.filter(r=>r.complete),groups=new Map();
  for(const r of completed){
    const v=r.vehicle||{},key=[r.courseName||r.courseId||'미확인',v.name||'미확인',v.grade||'?',v.stars??'?',v.tire||'?'].join(' / ');
-   if(!groups.has(key))groups.set(key,{n:0,p:0,g:0,events:0,gameTimes:[],clientTimes:[]});
+   if(!groups.has(key))groups.set(key,{n:0,p:0,g:0,events:0,allPerfect:0,wheelLock:0,ungraded:0,gameTimes:[],clientTimes:[]});
    const x=groups.get(key);x.n++;x.p+=r.grades?.perfect||0;x.g+=r.grades?.great||0;x.events+=r.events||0;
+   const wheel=!!r.wheelLockObservations?.length||/휠\s*락|wheel\s*lock/i.test(r.wheelLockResultEvidence?.text||'');
+   if(wheel)x.wheelLock++;
+   x.ungraded+=(r.history||[]).filter(h=>!h.feedbackGrade).length;
+   if(!wheel&&r.events>0&&(r.history||[]).length===r.events&&(r.history||[]).every(h=>h.feedbackGrade==='perfect'))x.allPerfect++;
    const gameSec=r.gameTiming?.recordedLapTimeSec??r.gameTiming?.resultTimeSec??r.gameTiming?.hudAtFinishSec;
    if(Number.isFinite(gameSec)&&gameSec>0)x.gameTimes.push(gameSec);
    if(Number.isFinite(r.observedRaceDurationMs)&&r.observedRaceDurationMs>0)x.clientTimes.push(r.observedRaceDurationMs/1000);
@@ -1005,7 +1010,10 @@ function renderAnalysis(){
    const gameBest=x.gameTimes.length?Math.min(...x.gameTimes).toFixed(3)+'초':'미확인';
    const gameAvg=x.gameTimes.length?(x.gameTimes.reduce((a,b)=>a+b,0)/x.gameTimes.length).toFixed(3)+'초':'미확인';
    const clientAvg=x.clientTimes.length?(x.clientTimes.reduce((a,b)=>a+b,0)/x.clientTimes.length).toFixed(3)+'초':'미측정';
-   lines.push(key,'  '+x.n+'판 · PERFECT '+pct+'%','  게임 랩타임 '+x.gameTimes.length+'/'+x.n+'판 · 최단 '+gameBest+' / 평균 '+gameAvg,'  브라우저 경과시간 평균 '+clientAvg+' (참고) ', '');
+   lines.push(key,'  '+x.n+'판 · PERFECT '+pct+'% / 올퍼펙트 '+x.allPerfect+'/'+x.n,
+     '  휠락 관측 '+x.wheelLock+'/'+x.n+'판 · 미판정 입력 '+x.ungraded+'개',
+     '  게임 랩타임 '+x.gameTimes.length+'/'+x.n+'판 · 최단 '+gameBest+' / 평균 '+gameAvg,
+     '  브라우저 경과시간 평균 '+clientAvg+' (참고) ', '');
  }
  if(!groups.size)lines.push('아직 완주 기록이 없습니다.');
  $('#analysis-summary').textContent=lines.join('\n');
