@@ -1,12 +1,12 @@
 // Dopamine Unified UI runtime — loaded from pinned GitHub commit by the stable bootstrap.
 // This file is not a userscript. The bootstrap provides page window and GM upload functions.
-// UI revision: manual-recorder 0.1.4, MANUAL upload priority plus non-secret per-run transport audit; AUTO prediction unchanged.
+// UI layout: compact-20261122. Manual recorder v0.1.6 and AUTO timing/prediction unchanged.
 (function () {
 'use strict';
 if(window.__dopamineUnifiedControl?.active)return;
 const autoRoot=document.getElementById('dopamine-auto-v336-ui');
 if(autoRoot)autoRoot.style.setProperty('display','none','important');
-const box=document.createElement('div');box.id='du-integrated';
+const box=document.createElement('div');box.id='du-integrated';box.dataset.uiLayout='compact-20261122';
 box.innerHTML='<style>'+
 '#du-integrated *{box-sizing:border-box}#du-integrated{font:11px/1.38 system-ui,sans-serif;color:#e9f3ff}'+
 '#du-integrated .panel{width:208px;max-width:calc(100vw - 16px);background:#152337;border:1px solid #667b91;border-radius:10px;padding:7px;box-shadow:0 5px 19px #0009;max-height:calc(100vh - 16px);overflow-y:auto;overscroll-behavior:contain}'+
@@ -27,7 +27,15 @@ box.innerHTML='<style>'+
 '#du-integrated .run-config small{font-size:9px;color:#97b0c9}'+
 '#du-integrated .report{background:#0e1b2b;border-radius:4px;padding:5px;max-height:200px;overflow:auto;white-space:pre-wrap;font-size:10px}'+
 '#du-integrated label{display:block;font-size:10px;margin-top:5px}#du-integrated input{width:100%;padding:5px;background:#102034;border:1px solid #6c839d;border-radius:5px;color:#fff}'+
-'#du-integrated .settings{max-height:180px;overflow:auto}#du-integrated #du-advanced .grid button{font-size:9px}'+
+'#du-integrated .settings{max-height:160px;overflow:auto}#du-integrated #du-advanced .grid button{font-size:10px}'+
+'#du-integrated .tools-heading{font-size:10px;font-weight:700;color:#bdd7f2;margin-bottom:5px}'+
+'#du-integrated #du-manual-shortcut button{width:100%;height:100%}'+
+'#du-integrated #du-advanced details{margin-top:5px;border:1px solid #435770;border-radius:6px;background:#112033}'+
+'#du-integrated #du-advanced details>summary{padding:7px 8px;font-size:10px;font-weight:700;color:#d9eafd;cursor:pointer;list-style-position:inside;user-select:none}'+
+'#du-integrated #du-advanced details>.grid{margin:0 6px 7px}'+
+'#du-integrated #du-advanced details>.settings{margin:0 7px 7px}'+
+'#du-integrated #du-advanced #du-diagnostics{margin:0 7px 7px;max-height:160px;overflow:auto;white-space:pre-wrap}'+
+'#du-integrated #du-force{background:#993443}'+
 '#du-integrated .racing .run-config,#du-integrated .racing .race-buttons{display:none}'+
 '#du-integrated .racing #du-status{max-height:18px}#du-integrated .racing #du-race-status{max-height:65px}'+
 '</style>'+
@@ -35,7 +43,13 @@ box.innerHTML='<style>'+
 '<div class="status" id="du-status">초기화 중…</div>'+
 '<div class="section" id="du-race"><label class="run-config">연속 <input id="du-run-limit" type="number" min="0" max="18" step="1" value="0" inputmode="numeric">판 <small>(0=타이어 모두)</small></label><div class="grid race-buttons"><button id="du-one">▶ 1판</button><button id="du-chain">🔁 연속</button><button id="du-stop" style="background:#a5313e">■ 중지</button><button id="du-garage">🚗 차고 갱신</button></div><div class="status" id="du-race-status"></div><div class="status" id="du-garage-status" hidden></div></div>'+
 '<div class="status" id="du-cloud-state">☁ Google Sheets 확인 중…</div>'+
-'<div class="section" id="du-advanced" hidden><div class="grid"><button id="du-log">📋 입력 기록 복사</button><button id="du-copy-analysis">📋 누적 분석 복사</button><button id="du-json">💾 전체 기록 백업</button><button id="du-detect">🔍 차량 다시 읽기</button><button id="du-defaults">↩ 설정 초기화</button><button id="du-export">📥 차고 백업</button><button id="du-trades">🧾 거래 기록 수집</button><button id="du-force">⛔ 긴급 즉시 중지</button><button id="du-cloud-config">☁ 시트 연결 설정</button><button id="du-cloud-retry">☁ 미전송 기록 전송</button><button id="du-cloud-diagnostic">🧪 기록·전송 진단</button><button id="du-garage-diagnostic">📋 차고 갱신 진단 복사</button><button id="du-storage-diagnostic">📦 저장공간 진단</button><button id="du-clean-acked">🧹 서버확인 기록 정리</button></div><div class="settings" id="du-settings"></div><div class="status" id="du-diagnostics"></div><button style="width:100%;margin-top:6px" id="du-save">⚙ AUTO 설정 저장</button></div>'+
+'<div class="section" id="du-advanced" hidden><div class="tools-heading">⚙ 빠른 도구</div>'+
+'<div class="grid" id="du-tools-primary"><button id="du-log">📋 입력 기록</button><button id="du-cloud-diagnostic">🧪 전송 진단</button><div id="du-manual-shortcut"></div><button id="du-force">⛔ 즉시 중지</button></div>'+
+'<details id="du-record-tools"><summary>📂 기록·전송 관리</summary><div class="grid" id="du-record-actions"><button id="du-copy-analysis">📋 누적 분석</button><button id="du-json">💾 전체 백업</button><button id="du-cloud-retry">☁ 미전송 보내기</button><button id="du-cloud-config">☁ 시트 연결</button><button id="du-storage-diagnostic">📦 저장공간 진단</button><button id="du-clean-acked">🧹 전송완료 정리</button></div></details>'+
+'<details id="du-garage-tools"><summary>🚗 차고·거래 관리</summary><div class="grid"><button id="du-detect">🔍 차량 다시 읽기</button><button id="du-export">📥 차고 백업</button><button id="du-trades">🧾 거래 기록 수집</button><button id="du-garage-diagnostic">📋 차고 갱신 진단</button></div></details>'+
+'<details id="du-manual-tools-detail"><summary>✋ 수동 출발 보완</summary><div class="grid" id="du-manual-tools"></div></details>'+
+'<details id="du-tune-detail"><summary>🛠 판정선·입력값 (고급)</summary><div class="settings" id="du-settings"></div><div class="grid"><button id="du-defaults">↩ 기본값 복원</button><button id="du-save">⚙ 설정 저장</button></div></details>'+
+'<details id="du-status-detail"><summary>ℹ 상세 상태·진단 원문</summary><div class="status" id="du-diagnostics"></div></details></div>'+
 '<div class="section" id="du-report" hidden><div class="report" id="du-report-body"></div><button style="width:100%;margin-top:6px" id="du-report-close">주행 화면으로</button></div></div>';
 document.body.appendChild(box);
 const q=s=>box.querySelector(s),autoUi=()=>document.getElementById('dopamine-auto-v336-ui');
@@ -238,6 +252,7 @@ function render(){
 }
 q('#du-auto').onclick=()=>toggle('race');
 q('#du-tools').onclick=()=>toggle('tools');
+for(const detail of q('#du-advanced').querySelectorAll('details'))detail.addEventListener('toggle',position);
 q('#du-one').onclick=()=>{if(getF().busy)return say('차고 갱신 중에는 주행할 수 없습니다.');press('start-btn');notice='';render();};
 q('#du-chain').onclick=()=>{
  if(getF().busy||getA().running||getA().chainEnabled)return say('주행 중에는 새 연속 주행을 시작할 수 없습니다.');
@@ -389,7 +404,7 @@ q('#du-cloud-diagnostic').onclick=async()=>{
     diagnosticSnapshot=content;
     q('#du-diagnostics').textContent=content;
     try{await navigator.clipboard.writeText(content);say('기록·전송 진단 복사 완료 (인증키 제외)');}
-    catch(_){say('진단 정보 표시됨 · ⚙ 화면 아래 확인');}
+    catch(_){q('#du-status-detail').open=true;position();say('진단 정보 표시됨 · ⚙ → 상세 상태');}
   }catch(e){say('진단 실패 · '+String(e?.message||e));}
 };
 const posKey='dopamine-unified-position-v1';let x=Math.max(8,innerWidth-224),y=Math.max(8,innerHeight-265);
@@ -440,7 +455,8 @@ const manualTelemetry=(()=>{
   q('#du-race-status').after(statusNode);
   const analysisBtn=document.createElement('button'),exportBtn=document.createElement('button');
   analysisBtn.textContent='✋ 수동 주행 분석';exportBtn.textContent='💾 수동 기록 백업';
-  q('#du-advanced .grid').append(analysisBtn,exportBtn);
+  q('#du-manual-shortcut').append(analysisBtn);
+  q('#du-record-actions').append(exportBtn);
   // Android Firefox: trusted manual touch release may be lost/retargeted by iframe.
   // Fix the gesture surface before touch starts, capture the pointer where possible,
   // observe real releases at frame/window and outer document, and only then consider
@@ -453,7 +469,7 @@ const manualTelemetry=(()=>{
   const firefoxEvents=[];
   try{const option=localStorage.getItem(FIREFOX_START_KEY);if(option!==null)firefoxAssist=option==='on';}catch(_){}
   const firefoxToggle=document.createElement('button'),firefoxDiagnostic=document.createElement('button');
-  q('#du-advanced .grid').append(firefoxToggle,firefoxDiagnostic);
+  q('#du-manual-tools').append(firefoxToggle,firefoxDiagnostic);
   function firefoxToggleLabel(){firefoxToggle.textContent='🛠 수동 출발 보완: '+(firefoxAssist?'ON':'OFF');}
   firefoxToggleLabel();firefoxDiagnostic.textContent='📋 수동 출발 진단 복사';
   function firefoxLog(kind,e=null,extra={}){
@@ -602,7 +618,7 @@ const manualTelemetry=(()=>{
   const relayHeld={brake:null,boost:null},relayCounters={down:0,up:0,cancel:0,missing:0},relayEvents=[];
   const relayToggle=document.createElement('button');
   const relayLayers={};
-  q('#du-advanced .grid').append(relayToggle);
+  q('#du-manual-tools').append(relayToggle);
   function relayLabel(){relayToggle.textContent='🖐 Firefox 수동 릴레이: '+(relayEnabled?'ON':'OFF');}
   relayLabel();
   function relayLog(kind,group,extra={}){
