@@ -1,15 +1,15 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-20T01:59:04.304Z",
-  "generatedAtKst": "2026-11-20T10:59:04.304+09:00",
+  "generatedAt": "2026-11-21T01:33:25.416Z",
+  "generatedAtKst": "2026-11-21T10:33:25.416+09:00",
   "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0.3",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-20T01:58:55.785Z",
-      "updatedAtKst": "2026-11-20T10:58:55.785+09:00",
+      "updatedAt": "2026-11-21T01:33:18.368Z",
+      "updatedAtKst": "2026-11-21T10:33:18.368+09:00",
       "modelCount": 12,
       "vehicleCount": 15,
       "vehicles": [
@@ -119,10 +119,10 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-20T01:58:57.622Z",
-      "updatedAtKst": "2026-11-20T10:58:57.622+09:00",
-      "modelCount": 16,
-      "vehicleCount": 16,
+      "updatedAt": "2026-11-21T01:33:20.009Z",
+      "updatedAtKst": "2026-11-21T10:33:20.009+09:00",
+      "modelCount": 15,
+      "vehicleCount": 15,
       "vehicles": [
         {
           "grade": "SSR",
@@ -210,13 +210,6 @@
         },
         {
           "grade": "R",
-          "model": "대우 다마스",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "R",
           "model": "두산 굴삭기",
           "maxStars": 5,
           "quantity": 1,
@@ -240,10 +233,10 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-20T01:58:59.152Z",
-      "updatedAtKst": "2026-11-20T10:58:59.152+09:00",
-      "modelCount": 13,
-      "vehicleCount": 13,
+      "updatedAt": "2026-11-21T01:33:21.440Z",
+      "updatedAtKst": "2026-11-21T10:33:21.440+09:00",
+      "modelCount": 12,
+      "vehicleCount": 12,
       "vehicles": [
         {
           "grade": "SSR",
@@ -324,13 +317,6 @@
         },
         {
           "grade": "R",
-          "model": "기아 레이 EV",
-          "maxStars": 2,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "R",
           "model": "현대 캐스퍼",
           "maxStars": 5,
           "quantity": 1,
@@ -340,8 +326,8 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-20T01:59:00.777Z",
-      "updatedAtKst": "2026-11-20T10:59:00.777+09:00",
+      "updatedAt": "2026-11-21T01:33:22.820Z",
+      "updatedAtKst": "2026-11-21T10:33:22.820+09:00",
       "modelCount": 14,
       "vehicleCount": 14,
       "vehicles": [
@@ -447,8 +433,8 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-20T01:59:02.595Z",
-      "updatedAtKst": "2026-11-20T10:59:02.595+09:00",
+      "updatedAt": "2026-11-21T01:33:24.213Z",
+      "updatedAtKst": "2026-11-21T10:33:24.213+09:00",
       "modelCount": 7,
       "vehicleCount": 7,
       "vehicles": [
@@ -505,8 +491,8 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-20T01:59:03.946Z",
-      "updatedAtKst": "2026-11-20T10:59:03.946+09:00",
+      "updatedAt": "2026-11-21T01:33:25.064Z",
+      "updatedAtKst": "2026-11-21T10:33:25.064+09:00",
       "modelCount": 6,
       "vehicleCount": 6,
       "vehicles": [
