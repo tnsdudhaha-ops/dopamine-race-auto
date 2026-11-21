@@ -1,22 +1,29 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-21T08:25:50.411Z",
-  "generatedAtKst": "2026-11-21T17:25:50.411+09:00",
+  "generatedAt": "2026-11-21T23:03:06.698Z",
+  "generatedAtKst": "2026-11-22T08:03:06.698+09:00",
   "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0.3",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-21T08:25:42.662Z",
-      "updatedAtKst": "2026-11-21T17:25:42.662+09:00",
+      "updatedAt": "2026-11-21T23:02:58.928Z",
+      "updatedAtKst": "2026-11-22T08:02:58.928+09:00",
       "modelCount": 12,
-      "vehicleCount": 15,
+      "vehicleCount": 16,
       "vehicles": [
         {
           "grade": "SSR",
           "model": "테슬라 로드스터",
           "maxStars": 1,
+          "quantity": 1,
+          "starBreakdown": []
+        },
+        {
+          "grade": "SR",
+          "model": "캐터필러 불도저",
+          "maxStars": 3,
           "quantity": 1,
           "starBreakdown": []
         },
@@ -38,8 +45,17 @@
           "grade": "S",
           "model": "쉐보레 말리부",
           "maxStars": 3,
-          "quantity": 1,
-          "starBreakdown": []
+          "quantity": 2,
+          "starBreakdown": [
+            {
+              "stars": 3,
+              "qty": 1
+            },
+            {
+              "stars": 2,
+              "qty": 1
+            }
+          ]
         },
         {
           "grade": "S",
@@ -68,13 +84,6 @@
           "grade": "S",
           "model": "현대 쏘나타",
           "maxStars": 3,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "S",
-          "model": "현대 아반떼 N",
-          "maxStars": 1,
           "quantity": 1,
           "starBreakdown": []
         },
@@ -119,8 +128,8 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-21T08:25:44.270Z",
-      "updatedAtKst": "2026-11-21T17:25:44.270+09:00",
+      "updatedAt": "2026-11-21T23:03:00.589Z",
+      "updatedAtKst": "2026-11-22T08:03:00.589+09:00",
       "modelCount": 15,
       "vehicleCount": 15,
       "vehicles": [
@@ -233,10 +242,10 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-21T08:25:45.779Z",
-      "updatedAtKst": "2026-11-21T17:25:45.779+09:00",
-      "modelCount": 12,
-      "vehicleCount": 12,
+      "updatedAt": "2026-11-21T23:03:02.067Z",
+      "updatedAtKst": "2026-11-22T08:03:02.067+09:00",
+      "modelCount": 11,
+      "vehicleCount": 11,
       "vehicles": [
         {
           "grade": "SSR",
@@ -289,13 +298,6 @@
         },
         {
           "grade": "S",
-          "model": "제네시스 G70",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "S",
           "model": "토요타 GR86",
           "maxStars": 1,
           "quantity": 1,
@@ -326,8 +328,8 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-21T08:25:47.271Z",
-      "updatedAtKst": "2026-11-21T17:25:47.271+09:00",
+      "updatedAt": "2026-11-21T23:03:03.589Z",
+      "updatedAtKst": "2026-11-22T08:03:03.589+09:00",
       "modelCount": 14,
       "vehicleCount": 14,
       "vehicles": [
@@ -433,8 +435,8 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-21T08:25:48.661Z",
-      "updatedAtKst": "2026-11-21T17:25:48.661+09:00",
+      "updatedAt": "2026-11-21T23:03:04.996Z",
+      "updatedAtKst": "2026-11-22T08:03:04.996+09:00",
       "modelCount": 7,
       "vehicleCount": 7,
       "vehicles": [
@@ -491,8 +493,8 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-21T08:25:50.057Z",
-      "updatedAtKst": "2026-11-21T17:25:50.057+09:00",
+      "updatedAt": "2026-11-21T23:03:06.345Z",
+      "updatedAtKst": "2026-11-22T08:03:06.345+09:00",
       "modelCount": 6,
       "vehicleCount": 6,
       "vehicles": [
