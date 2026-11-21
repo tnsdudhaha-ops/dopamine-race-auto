@@ -841,7 +841,7 @@ function scanBands(now){
     bottom=clamp(Math.ceil(cfg.scanBottom),0,canvas.height);
   if(x<0||x>=canvas.width||bottom<=top)return [];
   const primary=scanColumnBands(canvas,x,top,bottom);
-  if(!boostHeld||boostExpected!=='boostOff'
+  if(!boostHeld||boostExpected!=='boostOff'||primary.some(b=>b.type==='boostOff')
     ||now-lastSideBoostScanAt<SIDE_BOOST_SCAN.scanIntervalMs)return primary;
   lastSideBoostScanAt=now;
   const left=scanColumnBands(canvas,x-SIDE_BOOST_SCAN.offsetPx,top,bottom);
