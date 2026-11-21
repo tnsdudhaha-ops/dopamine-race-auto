@@ -1,6 +1,6 @@
 // Dopamine Unified UI runtime — loaded from pinned GitHub commit by the stable bootstrap.
 // This file is not a userscript. The bootstrap provides page window and GM upload functions.
-// UI revision: manual-recorder 0.1.2 with Android Firefox pointer capture, cross-window release telemetry and guarded start backup; AUTO unchanged.
+// UI revision: manual-recorder 0.1.3, Firefox trusted parent-overlay manual input relay; AUTO engine unchanged.
 (function () {
 'use strict';
 if(window.__dopamineUnifiedControl?.active)return;
@@ -391,7 +391,7 @@ const timer=setInterval(()=>{render();position();},750);
 // Passive MANUAL telemetry: no synthetic game input, no change to AUTO prediction.
 const manualTelemetry=(()=>{
   'use strict';
-  const VERSION='0.1.2',CHECKPOINT='dopamine-manual:checkpoint-v1';
+  const VERSION='0.1.3',CHECKPOINT='dopamine-manual:checkpoint-v1';
   const FINISH=/^(finished|finish|complete|completed|result|results|ended|end|done)$/;
   const ACTIVE=/^(running|racing|playing|active|in-progress)$/;
   const STOPPED=/^(interrupted|aborted|canceled|cancelled|failed|stopped|quit)$/;
@@ -552,10 +552,152 @@ const manualTelemetry=(()=>{
       gamePhase:phase(),redLights:countRed(),held:!!firefoxHeld,
       sawFive:firefoxSawFive,lastHoldSawFive:firefoxLastSawFive,lastObservedRed:firefoxLastRed,
       physicalReleases:firefoxReleaseCount,syntheticRecoveries:firefoxRecoveryCount,
+      relayEnabled,relayCounters:{...relayCounters},relayEvents:[...relayEvents],
       events:firefoxEvents};
     try{await navigator.clipboard.writeText(JSON.stringify(safe,null,2));say('수동 출발 진단 복사 완료');}
     catch(err){say('진단 복사 실패: '+String(err?.message||err));}
   };
+
+  // The physical Firefox touch gesture can leave the iframe before the game sees its release.
+  // A transparent *parent document* relay uses the user's trusted gesture over the visible
+  // controls and forwards the same down/up action using the game's existing AUTO-compatible
+  // PointerEvent path. This never decides *when* to release: the user must physically lift.
+  const FIREFOX_RELAY_KEY='dopamine-manual:firefox-input-relay-v1';
+  let relayEnabled=firefoxAndroid,relayLastLayout=0,relaySequence=0;
+  try{const stored=localStorage.getItem(FIREFOX_RELAY_KEY);if(stored!==null)relayEnabled=stored==='on';}catch(_){}
+  const relayHeld={brake:null,boost:null},relayCounters={down:0,up:0,cancel:0,missing:0},relayEvents=[];
+  const relayToggle=document.createElement('button');
+  const relayLayers={};
+  q('#du-advanced .grid').append(relayToggle);
+  function relayLabel(){relayToggle.textContent='🖐 Firefox 수동 릴레이: '+(relayEnabled?'ON':'OFF');}
+  relayLabel();
+  function relayLog(kind,group,extra={}){
+    relayEvents.push({atMs:round(now(),1),kind,group,phase:phase(),...extra});
+    if(relayEvents.length>40)relayEvents.shift();
+  }
+  function relayAllowed(){
+    return firefoxAndroid&&relayEnabled&&!disposed&&!getA().running&&!getA().chainEnabled&&
+      !/^(interrupted|aborted|canceled|cancelled|failed|stopped|quit|finished|finish|complete|completed|result|results|ended|end|done)$/.test(phase());
+  }
+  function relayGameInput(group,down){
+    const target=doc?.querySelector(group==='brake'?'.cursor-interaction':'.boost-key');
+    const win=doc?.defaultView;
+    if(!target||!win?.PointerEvent)return false;
+    try{
+      target.dispatchEvent(new win.PointerEvent(down?'pointerdown':'pointerup',{
+        bubbles:true,cancelable:true,pointerId:1,pointerType:'touch',
+        isPrimary:true,button:0,buttons:down?1:0
+      }));
+      return true;
+    }catch(e){relayLog('dispatch-error',group,{detail:String(e?.message||e).slice(0,90)});return false;}
+  }
+  function relayRecord(group,down,e){
+    recordManualControl({group,down,at:now(),pointerType:e.pointerType||'touch'});
+  }
+  function relayDown(group,e){
+    if(!e.isTrusted||!relayAllowed()||relayHeld[group])return;
+    const id=Number.isFinite(e.pointerId)?e.pointerId:null;
+    const touchId=e.changedTouches?.[0]?.identifier??null;
+    const held={id,touchId,at:now(),sequence:++relaySequence};
+    if(!relayGameInput(group,true)){relayCounters.missing++;return;}
+    relayHeld[group]=held;relayCounters.down++;
+    relayLog('trusted-relay-down',group,{type:e.type,pointerId:id,touchId,sequence:held.sequence});
+    relayRecord(group,true,e);
+    if(id!==null&&e.currentTarget?.setPointerCapture){
+      try{e.currentTarget.setPointerCapture(id);relayLog('relay-capture-requested',group,{pointerId:id});}
+      catch(err){relayLog('relay-capture-error',group,{detail:String(err?.message||err).slice(0,75)});}
+    }
+  }
+  function relayUp(group,e){
+    if(!e.isTrusted||!relayHeld[group])return;
+    const held=relayHeld[group];
+    if(Number.isFinite(e.pointerId)&&held.id!==null&&held.id!==e.pointerId)return;
+    if(e.changedTouches?.length&&held.touchId!==null&&
+       !Array.from(e.changedTouches).some(t=>t.identifier===held.touchId))return;
+    if(e.type==='pointercancel'||e.type==='touchcancel'){
+      relayCounters.cancel++;relayLog('trusted-relay-cancel',group,{type:e.type});return;
+    }
+    relayHeld[group]=null;
+    const success=relayGameInput(group,false);
+    relayCounters.up++;
+    relayLog('trusted-relay-up',group,{type:e.type,success,elapsedMs:round(now()-held.at)});
+    if(success)relayRecord(group,false,e);
+  }
+  function relayReset(reason){
+    for(const group of ['brake','boost']){
+      if(relayHeld[group]){
+        // Only release an existing synthetic held state on teardown or game transition,
+        // never synthesize a user-selected release timing during normal countdown/racing.
+        relayGameInput(group,false);
+        relayLog('relay-reset',group,{reason});
+        relayHeld[group]=null;
+      }
+    }
+  }
+  function relayCreateLayer(group){
+    const element=document.createElement('div');
+    element.style.cssText='position:fixed;display:none;z-index:2147483645;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;background:transparent;box-sizing:border-box;';
+    element.setAttribute('aria-label',group==='brake'?'수동 브레이크 입력 릴레이':'수동 부스터 입력 릴레이');
+    const events=['pointerdown','pointerup','pointercancel','touchstart','touchend','touchcancel','mousedown','mouseup','click'];
+    for(const type of events){
+      element.addEventListener(type,e=>{
+        if(!e.isTrusted)return;
+        e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
+        if(type==='pointerdown'||type==='touchstart')relayDown(group,e);
+        else if(type==='pointerup'||type==='touchend'||type==='pointercancel'||type==='touchcancel')relayUp(group,e);
+      },{capture:true,passive:false});
+    }
+    document.body.appendChild(element);
+    relayLayers[group]=element;
+  }
+  relayCreateLayer('brake');relayCreateLayer('boost');
+  function relayGlobalRelease(e){
+    if(!e.isTrusted)return;
+    if(!/^(pointerup|pointercancel|touchend|touchcancel)$/.test(e.type))return;
+    // Only the held pointer/touch is released; ignored for unrelated touches.
+    for(const group of ['brake','boost'])relayUp(group,e);
+  }
+  for(const type of ['pointerup','pointercancel','touchend','touchcancel']){
+    window.addEventListener(type,relayGlobalRelease,true);
+    document.addEventListener(type,relayGlobalRelease,true);
+  }
+  function relayPosition(at){
+    if(at-relayLastLayout<90)return;
+    relayLastLayout=at;
+    const allowed=relayAllowed(),frame=document.querySelector('iframe[title="타임어택"]');
+    const screen=frame?.getBoundingClientRect(),src=doc?.documentElement;
+    const sx=screen&&src?.clientWidth?screen.width/src.clientWidth:0;
+    const sy=screen&&src?.clientHeight?screen.height/src.clientHeight:0;
+    for(const group of ['brake','boost']){
+      const layer=relayLayers[group],target=doc?.querySelector(group==='brake'?'.cursor-interaction':'.boost-key');
+      const rect=target?.getBoundingClientRect?.();
+      if(!allowed||!screen||!rect||!sx||!sy||rect.width<20||rect.height<20||
+         screen.width<=0||screen.height<=0){
+        layer.style.display='none';continue;
+      }
+      const left=screen.left+rect.left*sx,top=screen.top+rect.top*sy,width=rect.width*sx,height=rect.height*sy;
+      if(width<28||height<24||left<-width||top<-height||left>innerWidth||top>innerHeight){
+        layer.style.display='none';continue;
+      }
+      layer.style.display='block';
+      layer.style.left=left+'px';layer.style.top=top+'px';layer.style.width=width+'px';layer.style.height=height+'px';
+    }
+  }
+  relayToggle.onclick=()=>{
+    relayEnabled=!relayEnabled;
+    try{localStorage.setItem(FIREFOX_RELAY_KEY,relayEnabled?'on':'off');}catch(_){}
+    relayReset('user-toggle');relayPosition(0);relayLabel();
+    say('Firefox 수동 입력 릴레이 '+(relayEnabled?'켜짐':'꺼짐'));
+  };
+  function relayDestroy(){
+    relayReset('module-destroy');
+    for(const type of ['pointerup','pointercancel','touchend','touchcancel']){
+      window.removeEventListener(type,relayGlobalRelease,true);
+      document.removeEventListener(type,relayGlobalRelease,true);
+    }
+    relayToggle.remove();
+    for(const el of Object.values(relayLayers))el.remove();
+  }
   function status(message){lastStatus=message;statusNode.textContent='✋ 수동 기록 · '+message+(lastError?' / '+lastError:'');}
   function now(){return performance.now();}
   function round(n,d=3){return Number.isFinite(n)?Number(n.toFixed(d)):null;}
@@ -719,6 +861,10 @@ const manualTelemetry=(()=>{
     const item=eventFor(e);if(!item)return;
     if(e.type.startsWith('pointer'))lastPointerTime=item.at;
     else if(item.at-lastPointerTime<320)return; // do not double-count synthetic mouse/touch events
+    recordManualControl(item);
+  }
+  function recordManualControl(item){
+    if(getA().running||getA().chainEnabled)return;
     if(pressState[item.group]===item.down)return;
     pressState[item.group]=item.down;
     const type=item.group==='brake'?(item.down?'brakeOn':'brakeOff'):(item.down?'boostOn':'boostOff');
@@ -874,16 +1020,19 @@ const manualTelemetry=(()=>{
     if(disposed)return;
     const a=getA();
     if(a.running||a.chainEnabled){
+      relayReset('auto-running');
+      relayPosition(at);
       if(session&&!session.saveRequested)finalize('AUTO-took-control',false);
       pending=[];redSeen=false;
       slowTimer=setTimeout(()=>{if(!disposed)raf=requestAnimationFrame(tick);},250);
       return;
     }
     raf=requestAnimationFrame(tick);
-    const next=game();if(next!==doc)attach(next);
+    const next=game();if(next!==doc){relayReset('iframe-change');attach(next);}
     if(!doc)return;
     if(!trackRoot?.isConnected){trackRoot=doc.querySelector('#pedallap');if(!trackRoot)return;}
     const p=phase();
+    relayPosition(at);
     if(firefoxAndroid){
       firefoxPrepareSurface();
       if(firefoxHeld&&at-lastFirefoxLightPoll>=15){lastFirefoxLightPoll=at;firefoxObserveLights();}
@@ -1001,7 +1150,7 @@ const manualTelemetry=(()=>{
   recoveredCheckpoint();
   raf=requestAnimationFrame(tick);
   return {version:VERSION,state:()=>({status:lastStatus,error:lastError,active:!!session,lastSavedRunId:lastSaved?.runId||null,firefoxStartAssist:firefoxAssist,firefoxStartRecoveries:firefoxRecoveryCount}),
-    destroy:()=>{disposed=true;firefoxReset('destroy');firefoxAssist=false;firefoxPrepareSurface();firefoxToggle.remove();firefoxDiagnostic.remove();
+    destroy:()=>{relayDestroy();disposed=true;firefoxReset('destroy');firefoxAssist=false;firefoxPrepareSurface();firefoxToggle.remove();firefoxDiagnostic.remove();
       if(firefoxAndroid)for(const ev of firefoxReleaseTypes){document.removeEventListener(ev,firefoxOuterRelease,true);window.removeEventListener(ev,firefoxOuterRelease,true);}
       if(doc?.defaultView)for(const ev of firefoxReleaseTypes)doc.defaultView.removeEventListener(ev,firefoxFrameRelease,true);if(raf!==null)cancelAnimationFrame(raf);if(slowTimer!==null)clearTimeout(slowTimer);if(doc)for(const ev of ['pointerdown','pointerup','pointercancel','mousedown','mouseup','touchstart','touchend','touchcancel'])doc.removeEventListener(ev,onControl,true);
       fbObserver?.disconnect();statusNode.remove();analysisBtn.remove();exportBtn.remove();}};
