@@ -425,9 +425,9 @@ const timer=setInterval(()=>{render();position();},750);
 // Passive MANUAL telemetry: no synthetic game input, no change to AUTO prediction.
 const manualTelemetry=(()=>{
   'use strict';
-  const VERSION='0.1.4',CHECKPOINT='dopamine-manual:checkpoint-v1';
+  const VERSION='0.1.5',CHECKPOINT='dopamine-manual:checkpoint-v1';
   const FINISH=/^(finished|finish|complete|completed|result|results|ended|end|done)$/;
-  const ACTIVE=/^(running|racing|playing|active|in-progress)$/;
+  const ACTIVE=/^(run|running|racing|playing|active|in-progress)$/;
   const STOPPED=/^(interrupted|aborted|canceled|cancelled|failed|stopped|quit)$/;
   const COLOR={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
   const names={brakeOn:'브레이크 ON',brakeOff:'브레이크 OFF',boostOn:'BOOST ON',boostOff:'BOOST OFF'};
