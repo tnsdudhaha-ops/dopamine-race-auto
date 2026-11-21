@@ -425,7 +425,7 @@ const timer=setInterval(()=>{render();position();},750);
 // Passive MANUAL telemetry: no synthetic game input, no change to AUTO prediction.
 const manualTelemetry=(()=>{
   'use strict';
-  const VERSION='0.1.5',CHECKPOINT='dopamine-manual:checkpoint-v1';
+  const VERSION='0.1.6',CHECKPOINT='dopamine-manual:checkpoint-v1';
   const FINISH=/^(finished|finish|complete|completed|result|results|ended|end|done)$/;
   const ACTIVE=/^(run|running|racing|playing|active|in-progress)$/;
   const STOPPED=/^(interrupted|aborted|canceled|cancelled|failed|stopped|quit)$/;
@@ -762,17 +762,67 @@ const manualTelemetry=(()=>{
       if(m)return Number(m[1]);}
     return null;
   }
-  function readClock(){
+  // Read the live game HUD using the same read-only DOM patterns as the verified AUTO engine.
+  // The earlier manual recorder omitted generic div/b/p elements and missed mid-race lap time.
+  function parseGameHudSeconds(raw){
+    const t=String(raw??'').trim();
+    if(!t||t.length>95||/최고\s*(?:기록|속력|속도)|랭킹|순위|best\s*lap/i.test(t))return null;
+    const m=t.match(/(?:^|[^\d])(?:(\d{1,2}):([0-5]\d)\.(\d{1,3})|(\d{1,3})\.(\d{1,3}))\s*(?:초|seconds?|sec\b|s\b)?/i);
+    if(!m)return null;
+    const sec=m[1]!==undefined?Number(m[1])*60+Number(m[2])+Number('0.'+m[3]):Number(m[4])+Number('0.'+m[5]);
+    return sec>=0&&sec<900&&Number.isFinite(sec)?Math.round(sec*1000)/1000:null;
+  }
+  function parseLabeledGameHudSeconds(raw){
+    const t=String(raw??'').replace(/\s+/g,' ').trim();
+    if(!t||t.length>160||/랭킹|순위|기록실|fastest\s*lap|best\s*lap/i.test(t))return null;
+    const m=t.match(/(?:랩\s*타임|lap\s*time)\s*[:：]?\s*((?:\d{1,2}:)?\d{1,3}\.\d{1,3})\s*(?:초|s\b)?/i);
+    return m?parseGameHudSeconds(m[1]):null;
+  }
+  function readClockObservation(){
     const r=trackRoot;if(!r)return null;
-    const els=[...r.querySelectorAll('[data-lap-time],[data-race-time],[class*="lap-time"],[class*="lapTime"],[class*="lapTimer"],[id*="lap-time"],[class*="race-timer"],span,small,strong')].slice(0,240);
-    for(const el of els){if(!visible(el))continue;const raw=el.getAttribute('data-lap-time')||el.getAttribute('data-race-time')||text(el);
-      if(raw.length>140||/랭킹|순위|최고\s*기록|best\s*lap/i.test(raw))continue;
-      const m=raw.match(/(?:랩\s*타임|lap\s*time)\s*[:：]?\s*((?:\d{1,2}:)?\d{1,3}\.\d{1,3})/i)||
-        (/^(?:\d{1,2}:)?\d{1,3}\.\d{1,3}(?:\s*초)?$/.test(raw)&&/lap|timer|race-timer/i.test(el.className+' '+el.id)?[null,raw]:null);
-      if(m){const time=m[1].trim(),parts=time.match(/^(?:(\d+):)?(\d+)\.(\d{1,3})/);
-        if(parts){const n=Number(parts[1]||0)*60+Number(parts[2])+Number('0.'+parts[3]);if(n>0&&n<900)return n;}}
+    const direct=[...r.querySelectorAll('[data-lap-time],[data-race-time],[id*="lap-time"],[class*="lap-time"],[class*="lapTime"],[id*="lapTimer"],[class*="lapTimer"],[class*="race-timer"]')].slice(0,50);
+    for(const el of direct){
+      if(!visible(el))continue;
+      const attr=el.getAttribute('data-lap-time')??el.getAttribute('data-race-time');
+      if(attr!==null){const seconds=parseGameHudSeconds(attr);if(seconds!==null)return {seconds,source:'game-hud-clock-attribute'};}
+      const t=text(el),labeled=parseLabeledGameHudSeconds(t);
+      if(labeled!==null)return {seconds:labeled,source:'game-hud-labeled-clock'};
+      if(/^(?:(?:\d{1,2}:)?\d{1,3}\.\d{1,3})\s*(?:초|s)?$/i.test(t)){
+        const seconds=parseGameHudSeconds(t);
+        if(seconds!==null)return {seconds,source:'game-hud-dedicated-clock'};
+      }
+    }
+    // Search active race root only. Exclude the outer-page FASTEST LAP ranking.
+    // Include div/b/p to find the actual lap-time HUD label present during a run.
+    for(const el of [...r.querySelectorAll('span,div,small,strong,b,p')].slice(0,500)){
+      if(!visible(el))continue;
+      const t=text(el);
+      if(t.length>160||!/랩\s*타임|lap\s*time/i.test(t))continue;
+      const seconds=parseLabeledGameHudSeconds(t);
+      if(seconds!==null)return {seconds,source:'game-hud-labeled-clock'};
     }
     return null;
+  }
+  function readClock(){return readClockObservation()?.seconds??null;}
+  function captureClock(at,force=false){
+    const observed=readClockObservation();
+    if(!observed||!session)return observed;
+    const elapsed=round(at-session.startedAt,2);
+    if(elapsed===null||elapsed<0)return null;
+    // Reject a decreasing value (e.g. a ranking/time from a replacement HUD element).
+    if(session.lastClock!==null&&observed.seconds+0.05<session.lastClock)return null;
+    session.lastClock=observed.seconds;
+    session.lastClockAtMs=elapsed;
+    session.lastClockSource=observed.source;
+    session.clockReadCount=(session.clockReadCount||0)+1;
+    const prev=session.clockSamples.at(-1);
+    if(!prev||elapsed-prev.timeMs>=450||force){
+      if(!prev||elapsed-prev.timeMs>25||observed.seconds!==prev.seconds){
+        session.clockSamples.push({timeMs:elapsed,seconds:observed.seconds,source:observed.source});
+        if(session.clockSamples.length>220)session.clockSamples.shift();
+      }
+    }
+    return observed;
   }
   function readResultClock(){
     for(const el of [...(trackRoot?.querySelectorAll('[class*="result"],[id*="result"],[class*="finish"]')||[])].slice(0,60)){
@@ -837,11 +887,16 @@ const manualTelemetry=(()=>{
     const elapsed=round(at-session.startedAt,2);
     if(parsed.kind==='segment'){
       const prev=session.segmentResults.at(-1)?.timeMs||0;
-      const gameHud=readClock()??session.lastClock;
+      const hud=captureClock(at,true);
+      const cachedAgeMs=elapsed-(session.lastClockAtMs??-Infinity);
+      const cachedUsable=!hud&&session.lastClock!==null&&cachedAgeMs>=0&&cachedAgeMs<=350;
+      const gameHud=hud?.seconds??(cachedUsable?session.lastClock:null);
       const previousHud=session.segmentResults.at(-1)?.gameHudSec??0;
       session.segmentResults.push({...parsed,timeMs:elapsed,elapsedSec:round(elapsed/1000),splitSec:round((elapsed-prev)/1000),
         gameHudSec:gameHud,gameHudSplitSec:gameHud!==null&&gameHud>=previousHud?round(gameHud-previousHud):null,
-        timingSource:gameHud!==null?'game-hud-at-feedback-observation':'browser-feedback-observation-not-official-game-split'});
+        hudSource:hud?.source??(cachedUsable?'recent-'+session.lastClockSource:null),
+        hudSampleAgeMs:hud?0:cachedUsable?round(cachedAgeMs):null,
+        timingSource:hud?'game-hud-at-feedback-observation':cachedUsable?'game-hud-recent-sample-at-feedback':'browser-feedback-observation-not-official-game-split'});
       return;
     }
     const candidates=session.history.filter(h=>h.type===parsed.type&&!h.feedbackGrade&&at-h.monotonicAt>=0&&at-h.monotonicAt<=1800);
@@ -873,7 +928,7 @@ const manualTelemetry=(()=>{
       startedAt:at,startedAtWall:Date.now(),startSource:source,referenceLines,
       phaseAtStart:phase(),history:[],controlActions:pending.splice(0),feedbackLog:[],segmentResults:[],
       speedSamples:[],clockSamples:[],wheelLockObservations:[],inputSequence:0,finishObservedAt:null,
-      saveRequested:false,saveState:'recording',lastClock:null};
+      saveRequested:false,saveState:'recording',lastClock:null,lastClockAtMs:null,lastClockSource:null,clockReadCount:0};
     for(const action of session.controlActions){action.role='preparation';action.relativeMs=round(action.at-session.startedAt,2);delete action.at;}
     pressState={brake:false,boost:false};redSeen=false;frameAvg=16.67;lastFrame=at;lastCheckpoint=0;lastClockPoll=0;lastSpeed=null;lastSpeedAt=0;
     lastPosition={};for(const key of Object.keys(trace))trace[key]=[];
@@ -987,7 +1042,10 @@ const manualTelemetry=(()=>{
       h.markerTimingMethod='bounded-bracketing-frames-interpolation';
     }
     const finalResult=finished?readResultClock():null;
-    const lap=finished?(finalResult??readClock()??s.lastClock):null;
+    const finishHud=finished?readClockObservation():null;
+    const lastHudAgeMs=(end-s.startedAt)-(s.lastClockAtMs??-Infinity);
+    const recentHud=finished&&s.lastClock!==null&&lastHudAgeMs>=0&&lastHudAgeMs<=1500?s.lastClock:null;
+    const lap=finished?(finalResult??finishHud?.seconds??recentHud):null;
     const grades={perfect:0,great:0,good:0,bad:0,miss:0};
     for(const x of s.feedbackLog)if(x.kind==='event'&&Object.hasOwn(grades,x.grade))grades[x.grade]++;
     const result={runId:s.runId,runSource:'MANUAL',mode:'manual',version:s.version,recorderVersion:s.recorderVersion,
@@ -997,9 +1055,11 @@ const manualTelemetry=(()=>{
       history:s.history.map(({monotonicAt,...record})=>record),controlActions:s.controlActions,
       feedbackLog:s.feedbackLog,segmentResults:s.segmentResults,
       timingSections:elapsedSections(s,round(end-s.startedAt,2),lap),
-      gameTiming:{recordedLapTimeSec:lap,recordedLapTimeSource:finalResult!==null?'game-explicit-result':lap!==null?'game-hud-at-finish':null,
+      gameTiming:{recordedLapTimeSec:lap,recordedLapTimeSource:finalResult!==null?'game-explicit-result':finishHud!==null?'game-hud-at-finish':recentHud!==null?'recent-game-hud-sample-near-finish':null,
         recordedLapTimeStatus:finalResult!==null?'explicit-final-result':lap!==null?'hud-finish-observed-not-officially-verified':'not-detected',
-        hudClockTrace:s.clockSamples},
+        hudClockTrace:s.clockSamples,clockCapture:{readCount:s.clockReadCount||0,sampleCount:s.clockSamples.length,
+          feedbackWithHud:s.segmentResults.filter(x=>Number.isFinite(x.gameHudSec)).length,feedbackTotal:s.segmentResults.length,
+          lastSource:s.lastClockSource,liveTimerAdvanced:s.clockSamples.some(x=>x.seconds>0)&&s.clockSamples.some(x=>x.seconds>0&&x.seconds<(lap??Infinity))}},
       observedRaceDurationMs:round(end-s.startedAt),raceDurationSource:'client-observed-start-to-finish',
       speedSamples:s.speedSamples,wheelLockObservations:s.wheelLockObservations,
       completionEvidence:{phase:phase(),matchedInputs:s.history.filter(x=>x.feedbackGrade).length,
@@ -1097,9 +1157,7 @@ const manualTelemetry=(()=>{
       }
       if(at-lastClockPoll>=170){
         lastClockPoll=at;
-        const clock=readClock();
-        if(clock!==null){session.lastClock=clock;const last=session.clockSamples.at(-1);
-          if(!last||at-session.startedAt-last.timeMs>=550)session.clockSamples.push({timeMs:round(at-session.startedAt),seconds:clock});}
+        captureClock(at);
       }
       observeFeedback();checkpoint(at);
       if(FINISH.test(p)){
@@ -1135,12 +1193,15 @@ const manualTelemetry=(()=>{
           '기록 '+(latest.gameTiming?.recordedLapTimeSec??'미확인')+'초 / 입력 '+latest.events+'개','',
           '구간 소요시간 (판정 메시지 관측 기준, 공식 스플릿 아님)');
         for(const sec of latest.timingSections?.fromFeedback||[])lines.push('  '+sec.name+': '+sec.durationSec+'초 / 누적 '+round(sec.toMs/1000)+'초');
-        lines.push('','게임 HUD로 관측한 구간시간 (공식 스플릿 아님)');
+        const captured=(latest.segmentResults||[]).filter(x=>Number.isFinite(x.gameHudSec)).length;
+        lines.push('','게임 HUD 중간시간 관측 '+captured+'/'+(latest.segmentResults?.length||0)+'개 판정 구간',
+          '게임 HUD로 관측한 구간시간 (공식 스플릿 아님)');
         for(const [i,sec] of (latest.timingSections?.fromGameHud||[]).entries()){
           const comparableSec=prev?.timingSections?.fromGameHud?.[i];
           const delta=comparableSec?.name===sec.name?round(sec.durationSec-comparableSec.durationSec):null;
           lines.push('  '+sec.name+': '+sec.durationSec+'초 / 누적 '+sec.toSec+'초'+(delta!==null?' / 직전 '+(delta>0?'+':'')+delta+'초':'') );
         }
+        if(!captured)lines.push('  진행 중 HUD 중간시간 미검출 · 판정 관측시간 구간은 별도로 보존');
         lines.push('','브레이크 기준 구간');
         for(const sec of latest.timingSections?.fromBrake||[])lines.push('  '+sec.name+': '+sec.durationSec+'초 / 평균속도 '+(sec.avgSpeedKmh??'미측정')+'km/h / 최대속도 '+(sec.maxSpeedKmh??'미측정')+'km/h');
         lines.push('','입력 타이밍 / 판정');
