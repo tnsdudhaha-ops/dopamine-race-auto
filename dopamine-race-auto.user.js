@@ -822,7 +822,42 @@ function saveRun(reason){
   }
 }
 function classify(r,g,b){if(Math.max(r,g,b)<95)return null;let bestType=null,bestDistance=Infinity;for(const [type,c] of Object.entries(COLORS)){const d=Math.hypot(r-c[0],g-c[1],b-c[2]);if(d<bestDistance){bestDistance=d;bestType=type;}}return bestDistance<=cfg.colorTolerance?bestType:null;}
-function scanBands(){const canvas=game()?.querySelector('canvas[aria-label="타임어택 주행 트랙"]');if(!canvas)return [];const x=Math.round(cfg.scanX),top=clamp(Math.floor(cfg.scanTop),0,canvas.height),bottom=clamp(Math.ceil(cfg.scanBottom),0,canvas.height);if(x<0||x>=canvas.width||bottom<=top)return [];let pixels;try{pixels=canvas.getContext('2d').getImageData(x,top,1,bottom-top).data;}catch(_){return [];}const bands=[];let current=null;function finish(){if(current&&current.count>=cfg.minBandPixels)bands.push({type:current.type,y:(current.start+current.end)/2});}for(let i=0;i<bottom-top;i++){const p=i*4,y=top+i,type=classify(pixels[p],pixels[p+1],pixels[p+2]);if(type&&current&&current.type===type&&y-current.end<=2){current.end=y;current.count++;}else{finish();current=type?{type,start:y,end:y,count:1}:null;}}finish();return bands;}
+function scanColumnBands(canvas,x,top,bottom){
+  if(x<0||x>=canvas.width||bottom<=top)return [];
+  let pixels;try{pixels=canvas.getContext('2d').getImageData(x,top,1,bottom-top).data;}catch(_){return [];}
+  const bands=[];let current=null;
+  function finish(){if(current&&current.count>=cfg.minBandPixels)bands.push({type:current.type,y:(current.start+current.end)/2});}
+  for(let i=0;i<bottom-top;i++){
+    const p=i*4,y=top+i,type=classify(pixels[p],pixels[p+1],pixels[p+2]);
+    if(type&&current&&current.type===type&&y-current.end<=2){current.end=y;current.count++;}
+    else{finish();current=type?{type,start:y,end:y,count:1}:null;}
+  }
+  finish();return bands;
+}
+function scanBands(now){
+  const canvas=game()?.querySelector('canvas[aria-label="타임어택 주행 트랙"]');
+  if(!canvas)return [];
+  const x=Math.round(cfg.scanX),top=clamp(Math.floor(cfg.scanTop),0,canvas.height),
+    bottom=clamp(Math.ceil(cfg.scanBottom),0,canvas.height);
+  const primary=scanColumnBands(canvas,x,top,bottom);
+  if(!boostHeld||boostExpected!=='boostOff'
+    ||now-lastSideBoostScanAt<SIDE_BOOST_SCAN.scanIntervalMs)return primary;
+  lastSideBoostScanAt=now;
+  const left=scanColumnBands(canvas,x-SIDE_BOOST_SCAN.offsetPx,top,bottom);
+  const right=scanColumnBands(canvas,x+SIDE_BOOST_SCAN.offsetPx,top,bottom);
+  const extra=[];
+  for(const band of left){
+    if(band.type!=='boostOff')continue;
+    const peer=right.find(b=>b.type==='boostOff'&&Math.abs(b.y-band.y)<=SIDE_BOOST_SCAN.maxYDifferencePx);
+    if(!peer)continue;
+    const y=(band.y+peer.y)/2;
+    if(primary.some(b=>b.type==='boostOff'&&Math.abs(b.y-y)<=8))continue;
+    extra.push({type:'boostOff',y,readSource:'verified-side-columns'});
+    detectionHealth.sideBoostBands++;
+    if(extra.length>=2)break;
+  }
+  return extra.length?primary.concat(extra):primary;
+}
 function updateFrameTiming(now){if(lastFrameTime){const dt=now-lastFrameTime;if(dt>DETECTION_GUARD.rafGapMs){detectionHealth.rafLongGaps++;detectionHealth.maxRafGapMs=Math.max(detectionHealth.maxRafGapMs,dt);}if(dt>0&&dt<=ENGINE.maxFrameMs)averageFrameMs=averageFrameMs*.85+dt*.15;}lastFrameTime=now;}
 function updateAcceleration(track,speed,dt){if(dt<4||dt>60||!Number.isFinite(speed))return;const previous=track.previousInstantSpeed;track.previousInstantSpeed=speed;if(!Number.isFinite(previous))return;const raw=(speed-previous)/dt;if(!Number.isFinite(raw)||Math.abs(raw)>ENGINE.accelerationMaxAbs){track.accelerationStable=false;universalStats.accelerationRejected++;return;}track.acceleration=track.acceleration*(1-ENGINE.accelerationSmoothing)+raw*ENGINE.accelerationSmoothing;track.accelerationSamples++;universalStats.accelerationSamples++;track.accelerationStable=Math.abs(raw-track.acceleration)<=ENGINE.accelerationStableThreshold;}
 // v3.3.5 predict(): 숫자·조건·보정식 그대로 유지.
@@ -864,6 +899,8 @@ function updateTracks(bands,now){
       best.y=band.y;best.lastTime=now;best.missing=0;
     }
     used.add(best.id);
+    best.lastMarkerReadSource=band.readSource||'center';
+    if(band.readSource==='verified-side-columns')best.sideColumnObservations=(best.sideColumnObservations||0)+1;
     captureTrackFrame(best,now);
     const isBoost=best.type.startsWith('boost'),target=isBoost?cfg.boostY:cfg.brakeY;
     const offset=isBoost?cfg.boostOffset:cfg.brakeOffset;
@@ -882,7 +919,8 @@ function updateTracks(bands,now){
     const predictedY=best.y+prediction.predictionPx+offset+(correction[eventKey]||0)+autoLead.px;
     lastDetected=LABELS[best.type]+' Y='+round(best.y,1)+(best.suppressed?' (늦게 등장·입력 차단)':'');
     if(!best.triggered&&!best.suppressed&&predictedY>=triggerLine){
-      if(executeEvent(best,predictedY,prediction,eventKey,target,autoLead))best.triggered=true;
+      const source=best.lastMarkerReadSource==='verified-side-columns'?'verified-side-columns':'visible';
+      if(executeEvent(best,predictedY,prediction,eventKey,target,autoLead,{source}))best.triggered=true;
     }
   }
   for(const track of tracks)if(!used.has(track.id)){
@@ -911,7 +949,7 @@ function drive(now){
       else setMessage('게임 주행 중단 감지 · 미완주 기록은 성능 통계 제외');
       return;
     }
-    updateTracks(scanBands(),now);connectFeedbackObserver();recordTelemetry(now);
+    updateTracks(scanBands(now),now);connectFeedbackObserver();recordTelemetry(now);
     sampleGameClock(now,phase);
     const explicitFinish=/^(finished|finish|complete|completed|result|results|ended|end|done)$/.test(phase);
     if(explicitFinish){
