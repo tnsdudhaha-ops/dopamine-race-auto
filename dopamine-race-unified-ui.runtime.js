@@ -1,6 +1,6 @@
 // Dopamine Unified UI runtime — loaded from pinned GitHub commit by the stable bootstrap.
 // This file is not a userscript. The bootstrap provides page window and GM upload functions.
-// UI revision: manual-recorder 0.1.3, Firefox trusted parent-overlay manual input relay; AUTO engine unchanged.
+// UI revision: manual-recorder 0.1.4, MANUAL upload priority plus non-secret per-run transport audit; AUTO prediction unchanged.
 (function () {
 'use strict';
 if(window.__dopamineUnifiedControl?.active)return;
@@ -48,14 +48,23 @@ const getA=()=>window.__duAuto?.state?.()||{}, getF=()=>window.__duFleet?.state?
  */
 const cloudUploader=(()=>{
   const RUNS_KEY='dopamine-auto-v336:runs';
-  const CFG_URL='dopamine-uploader:url',CFG_KEY='dopamine-uploader:key',SENT_KEY='dopamine-uploader:sent';
+  const CFG_URL='dopamine-uploader:url',CFG_KEY='dopamine-uploader:key',SENT_KEY='dopamine-uploader:sent',UPLOAD_AUDIT_KEY='dopamine-uploader:transfer-audit-v1';
   const ENDPOINT_PATTERN=/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/;
   let sending=false,checking=false,retryAfter=0,message='초기화 중',lastSuccess='',timer=null,disposed=false;
   let lastDiagnostic={localCount:0,localPending:0,lastLocalRunId:null,lastChecked:null,archiveFallback:false};
+  let lastAttempt=null,lastServerResult=null;
+  // Only non-secret transport metadata is persisted: never URLs, keys, full JSON, or response bodies.
+  const readAudit=()=>{try{const a=JSON.parse(GM_getValue(UPLOAD_AUDIT_KEY,'[]'));return Array.isArray(a)?a.slice(-60):[];}catch(_){return [];}};
+  function noteTransfer(stage,run,extra={}){
+    const entry={time:new Date().toISOString(),stage,runId:run?.runId||null,
+      runSource:run?.runSource||'AUTO',version:run?.version||null,...extra};
+    lastAttempt=entry;if(stage!=='start')lastServerResult=entry;
+    try{const a=readAudit();a.push(entry);GM_setValue(UPLOAD_AUDIT_KEY,JSON.stringify(a.slice(-60)));}catch(_){}
+  }
   const read=(k,fallback='')=>{try{return GM_getValue(k,fallback);}catch(_){return fallback;}};
   const write=(k,v)=>GM_setValue(k,v);
   const sentIds=()=>{try{const arr=JSON.parse(read(SENT_KEY,'[]'));return Array.isArray(arr)?arr:[];}catch(_){return [];}};
-  const state=()=>({message,sending,checking,configured:!!(read(CFG_URL)&&read(CFG_KEY)),lastSuccess,sentCount:sentIds().length,...lastDiagnostic});
+  const state=()=>({message,sending,checking,configured:!!(read(CFG_URL)&&read(CFG_KEY)),lastSuccess,lastAttempt,lastServerResult,sentCount:sentIds().length,...lastDiagnostic});
   function report(msg){message=msg;const e=q('#du-cloud-state');if(e)e.textContent='☁ Google Sheets · '+msg;console.info('[Dopamine Unified] Sheets:',msg);}
   async function uploadPending(force=false){
     if(disposed)return;
@@ -72,19 +81,27 @@ const cloudUploader=(()=>{
         runs=data;
       }catch(e){report('⚠ 로컬 기록 읽기 실패 · 보관소 복구 시도');}
       const sent=new Set(sentIds()),pending=runs.filter(r=>r?.runId&&!sent.has(r.runId));
-      let sourceRun=pending[0]||null;
       lastDiagnostic={localCount:runs.length,localPending:pending.length,lastLocalRunId:runs.at(-1)?.runId||null,lastChecked:new Date().toISOString(),archiveFallback:false};
+      let archivedRun=null,archiveError=null;
+      try{archivedRun=await window.__duRunArchive?.firstUnsent(sent)||null;}
+      catch(e){archiveError=String(e?.message||e).slice(0,90);}
+      // Keep the original AUTO queue available, but do not starve the MANUAL archive.
+      // MANUAL runIds are not inserted into the legacy AUTO localStorage array.
+      let sourceRun=(archivedRun?.runSource==='MANUAL'?archivedRun:null)||pending[0]||archivedRun||null;
+      lastDiagnostic.archiveFallback=!!sourceRun&&sourceRun===archivedRun;
+      lastDiagnostic.archiveError=archiveError;
+      lastDiagnostic.sourcePriority=sourceRun?.runSource==='MANUAL'?'MANUAL':sourceRun?'AUTO':null;
       if(!sourceRun){
-        try{sourceRun=await window.__duRunArchive?.firstUnsent(sent)||null;if(sourceRun)lastDiagnostic.archiveFallback=true;}
-        catch(e){retryAfter=Date.now()+60000;report('보관소 확인 오류 · '+String(e?.message||e).slice(0,80));return;}
+        report(archiveError?'보관소 확인 불가 · AUTO 로컬 '+runs.length+'건 · '+archiveError:'전송 대기 0건 · 로컬 '+runs.length+'건 확인');return;
       }
-      if(!sourceRun){report('전송 대기 0건 · 로컬 '+runs.length+'건 확인');return;}
       const timestamp=Date.parse(sourceRun.time||'');
       if(!Number.isFinite(timestamp)){report('원본 주행시각 확인 필요 · '+sourceRun.runId);return;}
       const run={...sourceRun,timeKst:new Date(timestamp+9*60*60*1000).toISOString().replace('Z','+09:00'),timeZone:'Asia/Seoul'};
       const body=JSON.stringify({uploadKey:key,run});
       if(body.length>1800000){retryAfter=Date.now()+60000;report('기록 용량 초과 · '+run.runId);return;}
-      sending=true;report('전송 중 · '+(lastDiagnostic.archiveFallback?'보관소 복구':'로컬 대기 '+pending.length+'건')+' · '+run.runId);
+      sending=true;
+      noteTransfer('start',run,{archiveSource:lastDiagnostic.archiveFallback,bodyBytes:body.length});
+      report('전송 중 · '+(run.runSource==='MANUAL'?'수동 기록':'AUTO 기록')+' · '+run.runId);
       try{GM_xmlhttpRequest({
         method:'POST',url,
         headers:{'Content-Type':'text/plain;charset=utf-8'},data:body,timeout:30000,
@@ -93,18 +110,23 @@ const cloudUploader=(()=>{
           let result;try{result=JSON.parse(response.responseText||'');}catch(_){}
           if(response.status>=200&&response.status<300&&result?.ok===true&&
             (result.status==='SAVED'||result.status==='ALREADY_SAVED')&&result.runId===run.runId){
+            noteTransfer('server-ack',run,{httpStatus:response.status,serverStatus:result.status});
             try{
               const ids=sentIds();if(!ids.includes(run.runId))ids.push(run.runId);
               write(SENT_KEY,JSON.stringify(ids.slice(-1000)));
-            }catch(e){report('서버 응답 수신 · 전송확인 로컬 저장 실패 · '+run.runId);return;}
+            }catch(e){noteTransfer('ack-marker-error',run,{errorCode:String(e?.name||'storage-failure').slice(0,40)});report('서버 응답 수신 · 전송확인 로컬 저장 실패 · '+run.runId);return;}
             lastSuccess=run.runId;retryAfter=0;
             report((result.status==='ALREADY_SAVED'?'기존 기록 확인':'서버 저장 응답')+' · '+run.runId);
             setTimeout(()=>uploadPending(),1000);
-          }else{retryAfter=Date.now()+60000;report('전송 실패 · '+(result?.status||'HTTP '+response.status)+' · '+run.runId+' · 60초 후 재시도');}
+          }else{
+            const status=String(result?.status||result?.error||'not-acknowledged').replace(/[^A-Za-z0-9_-]/g,'').slice(0,48);
+            noteTransfer('server-rejected',run,{httpStatus:response.status,serverStatus:status||'unknown',hasJsonBody:!!result});
+            retryAfter=Date.now()+60000;report('전송 실패 · '+(status||'HTTP '+response.status)+' · '+run.runId+' · 60초 후 재시도');
+          }
         },
-        onerror(){sending=false;retryAfter=Date.now()+60000;report('네트워크 오류 · '+run.runId+' · 60초 후 재시도');},
-        ontimeout(){sending=false;retryAfter=Date.now()+60000;report('응답 시간 초과 · '+run.runId+' · 60초 후 재시도');}
-      });}catch(e){sending=false;retryAfter=Date.now()+60000;report('전송 실행 오류 · '+String(e?.message||e));}
+        onerror(){sending=false;noteTransfer('network-error',run);retryAfter=Date.now()+60000;report('네트워크 오류 · '+run.runId+' · 60초 후 재시도');},
+        ontimeout(){sending=false;noteTransfer('timeout',run);retryAfter=Date.now()+60000;report('응답 시간 초과 · '+run.runId+' · 60초 후 재시도');}
+      });}catch(e){sending=false;noteTransfer('request-error',run,{errorCode:String(e?.name||'request-error').slice(0,40)});retryAfter=Date.now()+60000;report('전송 실행 오류 · '+String(e?.message||e));}
     }finally{checking=false;}
   }
   // Back up legacy localStorage runs in IndexedDB; original records are never deleted.
@@ -130,7 +152,7 @@ const cloudUploader=(()=>{
   report(read(CFG_URL)&&read(CFG_KEY)?'연결됨 · 로컬 기록 검사 중':'연결 설정 필요 · ⚙ → 시트 연결 설정');
   timer=setInterval(()=>uploadPending(),7000);
   setTimeout(()=>uploadPending(),2500);
-  return {configure,retry:()=>{retryAfter=0;uploadPending(true);},state,acknowledgedIds:sentIds,destroy:()=>{disposed=true;clearInterval(timer);}};
+  return {configure,retry:()=>{retryAfter=0;uploadPending(true);},state,transferAudit:readAudit,acknowledgedIds:sentIds,destroy:()=>{disposed=true;clearInterval(timer);}};
 })();
 const fieldNames=[['brakeY','브레이크 판정선 Y'],['boostY','부스터 판정선 Y'],['brakeOffset','브레이크 보정 px'],['boostOffset','부스터 보정 px'],['predictionMs','예측 시간 ms'],['boostZones','부스터 구간 수'],['colorTolerance','색상 허용 오차'],['tolerance','판정 허용 오차']];
 let view='race',notice='',drag=null,moved=false,diagnosticSnapshot='',garageRequested=false;
@@ -304,6 +326,7 @@ async function allSavedRuns(){
   for(const run of archived)if(run?.runId)byId.set(run.runId,run);
   for(const run of local)if(run?.runId)byId.set(run.runId,run);
   if(window.__duUnsavedRun?.runId)byId.set(window.__duUnsavedRun.runId,window.__duUnsavedRun);
+  if(window.__duUnsavedManualRun?.runId)byId.set(window.__duUnsavedManualRun.runId,window.__duUnsavedManualRun);
   return [...byId.values()].sort((a,b)=>String(a.time||'').localeCompare(String(b.time||'')));
 }
 function downloadRunBackup(runs){
@@ -335,6 +358,9 @@ q('#du-cloud-diagnostic').onclick=async()=>{
   try{
     const status=cloudUploader.state(),auto=getA(),runs=await allSavedRuns();
     const sent=new Set(cloudUploader.acknowledgedIds());
+    const archiveRuns=await window.__duRunArchive?.all?.().catch(()=>[])||[];
+    const archiveIds=new Set(archiveRuns.map(r=>r?.runId).filter(Boolean));
+    const manual=runs.filter(r=>r.runSource==='MANUAL'),unackedManual=manual.filter(r=>!sent.has(r.runId));
     const diagnostic={
       checkedAtKst:new Date(Date.now()+9*3600000).toISOString().replace('Z','+09:00'),
       autoVersion:auto.version||null,bootstrapSource:window.__duBootstrap?.source||null,
@@ -342,12 +368,20 @@ q('#du-cloud-diagnostic').onclick=async()=>{
       cloudConfigured:status.configured,cloudMessage:status.message,
       lastAcknowledgedId:status.lastSuccess||null,
       sentMarkers:sent.size,localCount:status.localCount,localPending:status.localPending,
-      archiveFallback:status.archiveFallback,
-      recoverableRuns:runs.length,
+      archiveFallback:status.archiveFallback,archiveError:status.archiveError||null,queuePriority:status.sourcePriority,
+      lastUploadAttempt:status.lastAttempt,lastUploadResult:status.lastServerResult,
+      recentUploadAttempts:cloudUploader.transferAudit().slice(-20),
+      recoverableRuns:runs.length,manualRuns:manual.length,manualPendingAck:unackedManual.length,
+      manualRunEvidence:manual.slice(-8).map(r=>({
+        runId:r.runId,complete:!!r.complete,reason:r.reason||null,events:r.events||0,
+        inIndexedDB:archiveIds.has(r.runId),serverAck:sent.has(r.runId),
+        pendingUpload:!sent.has(r.runId),runSource:r.runSource,time:r.time||null
+      })),
+      emergencyManualInMemory:window.__duUnsavedManualRun?.runId||null,
       latestRuns:runs.slice(-8).map(r=>{
         const timestamp=Date.parse(r.time||'');
         const corrected=Number.isFinite(timestamp)?new Date(timestamp+9*3600000).toISOString().replace('Z','+09:00'):null;
-        return {runId:r.runId,timeKst:corrected||r.timeKst||null,complete:r.complete,events:r.events,markedSent:sent.has(r.runId)};
+        return {runId:r.runId,runSource:r.runSource||'AUTO',version:r.version,timeKst:corrected||r.timeKst||null,complete:r.complete,events:r.events,markedSent:sent.has(r.runId)};
       }),
       recentRecorderActivity:readRecorderAudit().slice(-15)
     };
@@ -391,7 +425,7 @@ const timer=setInterval(()=>{render();position();},750);
 // Passive MANUAL telemetry: no synthetic game input, no change to AUTO prediction.
 const manualTelemetry=(()=>{
   'use strict';
-  const VERSION='0.1.3',CHECKPOINT='dopamine-manual:checkpoint-v1';
+  const VERSION='0.1.4',CHECKPOINT='dopamine-manual:checkpoint-v1';
   const FINISH=/^(finished|finish|complete|completed|result|results|ended|end|done)$/;
   const ACTIVE=/^(running|racing|playing|active|in-progress)$/;
   const STOPPED=/^(interrupted|aborted|canceled|cancelled|failed|stopped|quit)$/;
