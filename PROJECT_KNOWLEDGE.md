@@ -102,11 +102,11 @@
 | Release 1.0 | v3.2.8 | 최초 동결 기준 |
 | Release 2.0 | v3.3.3 | 검증된 주행 알고리즘의 기준선 |
 | Release 3.0 | v3.3.10 | 사용자가 지정한 현행 Release 라벨/기준선 |
-| 개발 엔진 | **v3.3.37** | 2026-11-21 현재 버전. Android Firefox 수동 입력 릴레이(manual-recorder v0.1.3)로 실제 터치 → 기존 검증된 게임 입력 전달, 엔진 예측식·상수 불변. Release 3.0 유지 |
+| 개발 엔진 | **v3.3.38** | 2026-11-21 현재 버전. MANUAL 자동 업로드 우선순위 및 서버 전송 결과 진단(manual-recorder v0.1.4), 엔진 예측식·상수 불변. Release 3.0 유지 |
 | 통합 부트스트랩 | **v1.1.0 (고정)** | GitHub 최신 AUTO / 차고 런타임 / 통합 UI를 동일 커밋에서 직접 다운로드 |
 
 - 고속 선행 예측은 과거 v3.3.5 계열 검증 공식을 보존한 상태로 후속 기능을 추가했다. 현행 `predict()`의 구현값이 최종 실제 근거다.
-- `Release 3.0`은 고정 기준선이고 개발 엔진 `@version`은 별도로 증가한다. 현재 `@version 3.3.37`.
+- `Release 3.0`은 고정 기준선이고 개발 엔진 `@version`은 별도로 증가한다. 현재 `@version 3.3.38`.
 - 배포·검증은 사용자의 Android Firefox + Tampermonkey 중심. GitHub 최신 커밋 SHA 기반 런타임 로드를 실행 시 사용 (Tampermonkey의 주기적 업데이트 기능에 비의존).
 - 통합 스크립트와 독립 스크립트를 동시에 활성화하여 중복 입력이 발생하지 않도록 한다.
 **[사용자 추가 확정: 2026-11-21]** 기능을 아주 조금이라도 추가·수정·개선한 경우 **전역 AUTO 개발 버전 `v3.3.x`를 반드시 1단계 증가**한다. AUTO 엔진뿐 아니라 수동 기록기·통합 UI·차고 분석기 등 통합 시스템의 기능 변경도 대상이다. `dopamine-race-auto.user.js`의 **Tampermonkey `@version`과 런타임 `VERSION`을 함께 변경**해 화면·로그에서 새 버전이 보이게 하고, 기능별 자체 버전과 변경 파일/커밋을 기록한다. 단순 조사·원본 데이터 조회·주행 분석·문서 정리처럼 **실제 기능 코드 변경이 없는 작업은 번호를 올리지 않는다**. `dopamine-race-unified.user.js` 고정 부트스트랩 v1.1.0과 Release 1.0/2.0/3.0 기준선은 이 정책으로 변경하지 않는다. **매 기능 변경은 별도 개발 번호를 사용**하며, 같은 기능의 한 번의 구현·검증 과정에서 생긴 후속 보완 커밋은 같은 버전으로 관리할 수 있다.
@@ -807,3 +807,15 @@
 - **[버전 관리]** 기능 변경으로 전역 개발 AUTO `@version` 및 `VERSION` **v3.3.36 → v3.3.37**. 커밋 `90c213ba4d461cbace1bde00dde1b79c989fb523`, blob SHA `e9e1df8ab01bdbf8995b443b369bb6ec98e2e2e9`. AUTO v3.3.37의 변경은 두 버전 문자열뿐, `predict()`, `ENGINE` 및 실제 AUTO 주행 입력 소스는 이전과 동일. 통합 부트스트랩 v1.1.0과 Release 1.0/2.0/3.0 기준선 유지.
 - **[모의 검증]** 통합 UI 전체 자바스크립트 구문 검사 통과. 부모 문서 투명 레이어 mock DOM에서 (1) 브레이크 down/up 정확히 한 쌍 및 수동 기록 2개, (2) 외부 문서에서 받는 동일 ID up도 전달, (3) cancel만 관측 시 자동 해제 없음, (4) 입력 없이 가상 신호 없음, (5) AUTO 실행 중 릴레이 숨김·전달 0회, 다섯 가지 모의 시나리오 성공. **실제 게임에서 부모 문서 오버레이에 따른 게임 중단 및 좌표 일치 여부·manual JSON 저장·AUTO 주행 회귀는 아직 검증하지 못함.**
 - **[실기기 확인 절차]** 게임 새로고침 → AUTO v3.3.37 확인 → `⚙ → 🖐 Firefox 수동 릴레이: ON` 확인 → 도전 횟수 여유 있을 때 1회 수동 출발만 검증. 실패하면 `⚙ → 📋 수동 출발 진단 복사`에서 `relayCounters.down/up`, `relayEvents` 확인. 브레이크 버튼 위치 오버레이가 맞지 않거나 타이밍 왜곡이 보이면 즉시 릴레이 OFF로 되돌리고, AUTO 정상 주행 여부도 분리 확인. 성공은 사용자 실측 완료 후에만 판정.
+
+
+### 2026-11-21 10:00 KST · 수동 주행 원격 업로드 누락 조사 및 v3.3.38 개발 수정
+
+- **[실제 사용자 증언]** Android Firefox에서 수동 출발 릴레이 v3.3.37 적용 후 수동 출발은 정상화됐다고 확인. 수동 주행의 자동 전송/분석을 요청했으나 당시 Google Sheets 및 Drive에는 방금 주행한 `runSource:'MANUAL'` 원본이 조회되지 않음. 출발 성공 자체는 완료·IndexedDB 저장·서버 업로드 성공의 증거가 아니므로 각 단계 분리.
+- **[원격 데이터 최신 재조회]** Sheets `도파민레이스_AUTO_주행기록`의 `주행기록` A1:H300 조회 시 헤더 제외 **82건**, 마지막 행 2026-11-20 12:46:34 KST / `mwofs3lm-s1tqag0` / AUTO v3.3.34. Google Drive `도파민레이스_AUTO_JSON` 폴더 총 **78개**, 최신 JSON도 위 AUTO 원본. 2026-11-21 MANUAL 원본은 조회되지 않음. **브라우저 IndexedDB/로컬Storage·Google Apps Script 실행 로그·개인 토큰/URL은 확인할 수 없음**. 따라서 이번 수동 업로드 누락의 실제 원인을 원격 자료만으로 하나로 확정하면 안 됨.
+- **[확정 코드 결함 1 — MANUAL 업로드 대기열 기아]** 통합 UI v0.1.3 `cloudUploader.uploadPending()`이 구형 AUTO localStorage `dopamine-auto-v336:runs`에 `pending[0]`이 있는 동안 IndexedDB `__duRunArchive.firstUnsent` 자체를 호출하지 않았음. MANUAL 완료 원본은 `__duRunArchive.put`에만 저장하므로, 오래된 미전송 AUTO가 서버 거절/60초 재시도를 반복하면 MANUAL은 무기한 전송되지 않을 수 있음. 이 버그는 **소스에서 확인**; 이번 실제 수동 주행에 미전송 AUTO가 존재했는지 여부는 아직 미확인.
+- **[확정 코드 결함 2 — 진단 미흡]** 기존 `기록·전송 진단 복사`는 AUTO/수동 runSource를 분리 표시하지 않고, 각각의 서버 전송 시작/응답 status/ACK를 보존하지 않아 실패 단계를 사후 특정하기 어려웠음. 자체 스토리지 실패 또는 서버 MANUAL JSON 거부 가능성이 있는데, Apps Script 서버 소스와 사용자 측 인증 설정은 미확인.
+- **[개발 반영]** `dopamine-race-unified-ui.runtime.js` 수동 기록기 **v0.1.4**, 커밋 `a3a99be4fdb1b8f46722e832c1b8c2dc5672ee79`. IndexedDB의 미전송 MANUAL run을 기존 로컬 AUTO pending보다 먼저 선택. 기존 AUTO 업로드 로직과 서버 ACK 정책(`result.ok=true`, `SAVED/ALREADY_SAVED`, 동일 runId) 보존. 최초 업로드 실패나 네트워크 문제는 오류 상태를 기록하며 미전송/미승인 원본을 임의 삭제하지 않음. `GM_getValue/GM_setValue` 별도 `dopamine-uploader:transfer-audit-v1`에는 URL/UPLOAD_KEY/JSON/HTTP 응답 원문을 제외하고 runId, runSource, time, 전송 단계(start/server-ack/server-rejected/network-error/timeout/request-error), HTTP 상태와 제한된 서버 status 코드만 최근 60건 보존. `⚙ → 🧪 기록·전송 진단`에 MANUAL 전체/미ACK/IndexedDB 실제 보관/최근 8건/최근 전송 20건 및 메모리 긴급 백업 유무 추가. `allSavedRuns()`에서 `__duUnsavedManualRun`도 진단에 표시해 저장실패 구별.
+- **[개발 버전 규칙]** AUTO 사용자 표시 및 Tampermonkey `@version`, 코드 `VERSION` **3.3.37 → 3.3.38**, 커밋 `5be342555c05930c175915af9ebc9c239afc9cc3`, AUTO SHA `6776c8d08da95df4708204f0425c231e5e3a7d14`. 엔진 예측/입력/ENGINE·Release 1.0/2.0/3.0·설치형 부트스트랩 v1.1.0 모두 변동 없음.
+- **[모의 검증]** 실제 개발 업로더 함수와 mock GM/IndexedDB/Apps Script 응답을 이용한 5개 시나리오 통과: (1) AUTO pending + MANUAL IndexedDB 동시 존재 → MANUAL 우선 발송 후 SAVED ACK ID 기록, (2) AUTO만 존재 → 기존 AUTO 업로드 성공, (3) MANUAL 서버 REJECTED → 전송실패 감사 기록·미전송 유지, (4) IndexedDB 접근 실패 + AUTO local 존재 → AUTO 전송 성공, (5) 연결설정 없음 → 전송하지 않고 오류 표시. JS 구문 검사 통과. **실사용 MANUAL 업로드 성공 및 서버 포맷 허용은 아직 미검증**.
+- **[다음 실제 확인 절차]** Firefox에서 페이지 새로고침, v3.3.38 확인, 게임 조작 없이 `⚙ → ☁ 미전송 기록 전송` 실행 후 `⚙ → 🧪 기록·전송 진단` 복사(자격증명 제외). `manualRuns`, `manualRunEvidence[].inIndexedDB/serverAck`, `manualPendingAck`, `recentUploadAttempts[].stage/serverStatus/httpStatus`, `cloudConfigured`, `cloudMessage`로 (A) 수동 기록 미생성, (B) 저장 실패, (C) 대기열 막힘, (D) 서버가 MANUAL JSON 거절, (E) 서버 승인 여부를 판별. **기존 기록을 삭제·브라우저 사이트 데이터 초기화하거나 사용자의 비밀 업로드 키를 요구하지 않음**. 저장되지 않은 실주행을 보존하는 백업은 필요 시에만 권고.
