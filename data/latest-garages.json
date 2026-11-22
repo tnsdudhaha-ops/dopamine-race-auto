@@ -1,17 +1,17 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-22T08:34:28.207Z",
-  "generatedAtKst": "2026-11-22T17:34:28.207+09:00",
+  "generatedAt": "2026-11-22T15:09:53.444Z",
+  "generatedAtKst": "2026-11-23T00:09:53.444+09:00",
   "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0.3",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-22T08:34:20.196Z",
-      "updatedAtKst": "2026-11-22T17:34:20.196+09:00",
+      "updatedAt": "2026-11-22T15:09:46.577Z",
+      "updatedAtKst": "2026-11-23T00:09:46.577+09:00",
       "modelCount": 12,
-      "vehicleCount": 16,
+      "vehicleCount": 17,
       "vehicles": [
         {
           "grade": "SSR",
@@ -84,8 +84,17 @@
           "grade": "S",
           "model": "현대 쏘나타",
           "maxStars": 3,
-          "quantity": 1,
-          "starBreakdown": []
+          "quantity": 2,
+          "starBreakdown": [
+            {
+              "stars": 3,
+              "qty": 1
+            },
+            {
+              "stars": 2,
+              "qty": 1
+            }
+          ]
         },
         {
           "grade": "R",
@@ -128,9 +137,9 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-22T08:34:21.817Z",
-      "updatedAtKst": "2026-11-22T17:34:21.817+09:00",
-      "modelCount": 15,
+      "updatedAt": "2026-11-22T15:09:48.074Z",
+      "updatedAtKst": "2026-11-23T00:09:48.074+09:00",
+      "modelCount": 14,
       "vehicleCount": 15,
       "vehicles": [
         {
@@ -143,7 +152,7 @@
         {
           "grade": "SSR",
           "model": "페라리 458 이탈리아",
-          "maxStars": 2,
+          "maxStars": 3,
           "quantity": 1,
           "starBreakdown": []
         },
@@ -172,8 +181,13 @@
           "grade": "SR",
           "model": "포르쉐 718",
           "maxStars": 3,
-          "quantity": 1,
-          "starBreakdown": []
+          "quantity": 2,
+          "starBreakdown": [
+            {
+              "stars": 3,
+              "qty": 2
+            }
+          ]
         },
         {
           "grade": "S",
@@ -185,14 +199,14 @@
         {
           "grade": "S",
           "model": "토요타 GR86",
-          "maxStars": 4,
+          "maxStars": 5,
           "quantity": 1,
           "starBreakdown": []
         },
         {
           "grade": "S",
           "model": "현대 싼타페",
-          "maxStars": 1,
+          "maxStars": 3,
           "quantity": 1,
           "starBreakdown": []
         },
@@ -200,13 +214,6 @@
           "grade": "S",
           "model": "현대 아반떼 N",
           "maxStars": 3,
-          "quantity": 1,
-          "starBreakdown": []
-        },
-        {
-          "grade": "S",
-          "model": "현대 아이오닉 5",
-          "maxStars": 2,
           "quantity": 1,
           "starBreakdown": []
         },
@@ -227,7 +234,7 @@
         {
           "grade": "R",
           "model": "쉐보레 스파크",
-          "maxStars": 4,
+          "maxStars": 5,
           "quantity": 1,
           "starBreakdown": []
         },
@@ -242,8 +249,8 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-22T08:34:23.324Z",
-      "updatedAtKst": "2026-11-22T17:34:23.324+09:00",
+      "updatedAt": "2026-11-22T15:09:49.450Z",
+      "updatedAtKst": "2026-11-23T00:09:49.450+09:00",
       "modelCount": 11,
       "vehicleCount": 11,
       "vehicles": [
@@ -328,8 +335,8 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-22T08:34:24.830Z",
-      "updatedAtKst": "2026-11-22T17:34:24.830+09:00",
+      "updatedAt": "2026-11-22T15:09:50.832Z",
+      "updatedAtKst": "2026-11-23T00:09:50.832+09:00",
       "modelCount": 14,
       "vehicleCount": 14,
       "vehicles": [
@@ -435,8 +442,8 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-22T08:34:26.205Z",
-      "updatedAtKst": "2026-11-22T17:34:26.205+09:00",
+      "updatedAt": "2026-11-22T15:09:52.215Z",
+      "updatedAtKst": "2026-11-23T00:09:52.215+09:00",
       "modelCount": 7,
       "vehicleCount": 7,
       "vehicles": [
@@ -493,8 +500,8 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-22T08:34:27.850Z",
-      "updatedAtKst": "2026-11-22T17:34:27.850+09:00",
+      "updatedAt": "2026-11-22T15:09:53.093Z",
+      "updatedAtKst": "2026-11-23T00:09:53.093+09:00",
       "modelCount": 6,
       "vehicleCount": 6,
       "vehicles": [
