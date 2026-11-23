@@ -1,15 +1,15 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-22T15:09:53.444Z",
-  "generatedAtKst": "2026-11-23T00:09:53.444+09:00",
+  "generatedAt": "2026-11-23T10:12:48.662Z",
+  "generatedAtKst": "2026-11-23T19:12:48.662+09:00",
   "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0.3",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-22T15:09:46.577Z",
-      "updatedAtKst": "2026-11-23T00:09:46.577+09:00",
+      "updatedAt": "2026-11-23T10:12:41.391Z",
+      "updatedAtKst": "2026-11-23T19:12:41.391+09:00",
       "modelCount": 12,
       "vehicleCount": 17,
       "vehicles": [
@@ -137,8 +137,8 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-22T15:09:48.074Z",
-      "updatedAtKst": "2026-11-23T00:09:48.074+09:00",
+      "updatedAt": "2026-11-23T10:12:42.952Z",
+      "updatedAtKst": "2026-11-23T19:12:42.952+09:00",
       "modelCount": 14,
       "vehicleCount": 15,
       "vehicles": [
@@ -249,10 +249,10 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-22T15:09:49.450Z",
-      "updatedAtKst": "2026-11-23T00:09:49.450+09:00",
-      "modelCount": 11,
-      "vehicleCount": 11,
+      "updatedAt": "2026-11-23T10:12:44.356Z",
+      "updatedAtKst": "2026-11-23T19:12:44.356+09:00",
+      "modelCount": 12,
+      "vehicleCount": 12,
       "vehicles": [
         {
           "grade": "SSR",
@@ -326,6 +326,13 @@
         },
         {
           "grade": "R",
+          "model": "대우 다마스",
+          "maxStars": 1,
+          "quantity": 1,
+          "starBreakdown": []
+        },
+        {
+          "grade": "R",
           "model": "현대 캐스퍼",
           "maxStars": 5,
           "quantity": 1,
@@ -335,8 +342,8 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-22T15:09:50.832Z",
-      "updatedAtKst": "2026-11-23T00:09:50.832+09:00",
+      "updatedAt": "2026-11-23T10:12:45.981Z",
+      "updatedAtKst": "2026-11-23T19:12:45.981+09:00",
       "modelCount": 14,
       "vehicleCount": 14,
       "vehicles": [
@@ -442,8 +449,8 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-22T15:09:52.215Z",
-      "updatedAtKst": "2026-11-23T00:09:52.215+09:00",
+      "updatedAt": "2026-11-23T10:12:47.378Z",
+      "updatedAtKst": "2026-11-23T19:12:47.378+09:00",
       "modelCount": 7,
       "vehicleCount": 7,
       "vehicles": [
@@ -500,8 +507,8 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-22T15:09:53.093Z",
-      "updatedAtKst": "2026-11-23T00:09:53.093+09:00",
+      "updatedAt": "2026-11-23T10:12:48.304Z",
+      "updatedAtKst": "2026-11-23T19:12:48.304+09:00",
       "modelCount": 6,
       "vehicleCount": 6,
       "vehicles": [
