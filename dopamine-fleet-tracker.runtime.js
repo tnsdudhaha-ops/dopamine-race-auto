@@ -420,7 +420,11 @@
     note('6/6명 수집 완료 · GitHub 업로드 중…');
     try{
       await uploadAiGarageJson(payload,token);
-      note('GitHub 자동 업로드 성공 · '+toKst(payload.generatedAt)+' · 총 '+payload.participants.reduce((n,p)=>n+p.vehicleCount,0)+'대'+(pendingQuotaSave?' · ⚠ 로컬 저장공간 초과: GitHub 업로드 완료, 브라우저 저장 보류':''));
+      const vehicles=payload.participants.flatMap(p=>p.vehicles);
+      const knownStar5=vehicles.reduce((n,v)=>n+(v.star5Count??(v.maxStars===5?1:0)),0);
+      const captured=vehicles.reduce((n,v)=>n+v.ersBonuses.filter(Number.isInteger).length,0);
+      const unknownStar5=vehicles.some(v=>v.maxStars===5&&v.star5Count===null);
+      note('GitHub 자동 업로드 성공 · '+toKst(payload.generatedAt)+' · 총 '+payload.participants.reduce((n,p)=>n+p.vehicleCount,0)+'대 · ERS '+captured+'/'+knownStar5+'대'+(unknownStar5?' (★5 수량 일부 미확정)':'')+(captured<knownStar5||unknownStar5?' · ERS 미확인 있음':'')+(pendingQuotaSave?' · ⚠ 로컬 저장공간 초과: GitHub 업로드 완료, 브라우저 저장 보류':''));
       return true;
     }catch(e){
       const err=String(e?.message||e);
