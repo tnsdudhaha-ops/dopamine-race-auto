@@ -943,6 +943,7 @@ function updateTracks(bands,now){
       const delta=band.y-track.y;
       if(delta>=-8&&delta<cfg.matchDistance&&Math.abs(delta)<distance){best=track;distance=Math.abs(delta);}
     }
+    const priorMissing=best?.missing??0;
     if(!best){
       best={id:nextTrackId++,type:band.type,y:band.y,firstSeenY:band.y,firstSeenAt:now,
         lastTime:now,speed:0,previousInstantSpeed:null,acceleration:0,
@@ -972,7 +973,7 @@ function updateTracks(bands,now){
     }
     used.add(best.id);
     if(band.readSource==='verified-wide-columns'){
-      best.wideConsecutive=best.lastMarkerReadSource==='verified-wide-columns'&&!best.missing&&best.lastObservationGapMs<=WIDE_BOOST_SCAN.maxObservationGapMs?(best.wideConsecutive||0)+1:1;
+      best.wideConsecutive=best.lastMarkerReadSource==='verified-wide-columns'&&priorMissing===0&&best.lastObservationGapMs<=WIDE_BOOST_SCAN.maxObservationGapMs?(best.wideConsecutive||0)+1:1;
       best.wideColumnObservations=(best.wideColumnObservations||0)+1;best.lastWideOffsets=band.wideOffsets||null;
       best.wideOnly=best.wideOnly!==false&&!best.centerObserved;
     }else{best.wideConsecutive=0;best.wideOnly=false;if(!band.readSource)best.centerObserved=true;}
