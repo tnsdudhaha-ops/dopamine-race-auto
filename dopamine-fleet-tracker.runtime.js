@@ -1,7 +1,7 @@
 // Dopamine Fleet Tracker runtime — Vehicle Analyzer Release 1.0 (bootstrap compatibility marker)
 (function () {
   'use strict';
-  const VERSION = '1.0.3';
+  const VERSION = '1.0.4';
   const KEY = 'dopamine-fleet-tracker-v1';
   const USERS = ['ㅇ발','구레긔','피콜로','ㅇ샘','영감','톩끼'];
   const ALIASES = {'○발':'ㅇ발','◯발':'ㅇ발','〇발':'ㅇ발','그레이트':'구레긔','픸홀':'피콜로','픽홀':'피콜로','핔홀':'피콜로','핗홀':'피콜로','픽홀':'피콜로','콜로':'피콜로','참돔':'ㅇ샘','킹황':'영감','갱서':'톩끼'};
@@ -124,6 +124,18 @@
     const m=(p?.innerText||'').match(/보유차량\s*[·•:]?\s*(\d+)\s*대/);
     return m ? Number(m[1]) : null;
   }
+  function readStar5Ers(raw,stars,qty,breakdown){
+  const count=stars!==5?0:qty===1?1:Array.isArray(breakdown)&&breakdown.reduce((n,b)=>n+b.qty,0)===qty?breakdown.filter(b=>b.stars===5).reduce((n,b)=>n+b.qty,0):null;
+  if(count===0)return {star5Count:0,ersBonuses:[],ersStatus:'not-applicable'};
+  const re=/\bERS\s*(?:(?:효율|에너지)\s*)?(?:(?:증가|보너스)\s*)?[:：]?\s*\+?\s*(\d{1,3})\s*%(?!\s*[~～–—-]\s*\d)/gi;
+  const matches=[...String(raw||'').matchAll(re)];
+  const values=matches.map(m=>Number(m[1]));
+  const valid=values.every(v=>Number.isInteger(v)&&v>=10&&v<=100);
+  // A grouped card with an unknown count or an unequal label count cannot identify all individual cars.
+  const confirmed=count!==null&&count>0&&valid&&values.length===count;
+  const evidence=matches.slice(0,12).map(m=>m[0].replace(/\s+/g,' ').trim().slice(0,100));
+  return {star5Count:count,ersBonuses:confirmed?values:count===null?[]:Array(count).fill(null),ersStatus:confirmed?'collected':!matches.length?'not-visible':'ambiguous',ersEvidence:evidence};
+}
   function parseGarage(p) {
     if (!p) return [];
     const items=[];
@@ -164,7 +176,25 @@
       const breakdown=[];
       for(const m of lines.slice(ix+1).join(' ').matchAll(/([1-5])\s*성\s*[×x]\s*(\d+)/g))
         breakdown.push({stars:Number(m[1]),qty:Number(m[2])});
-      items.push({grade:grade[1],model,stars,qty,breakdown:breakdown.reduce((n,x)=>n+x.qty,0)===qty?breakdown:[]});
+      const verifiedBreakdown=breakdown.reduce((n,x)=>n+x.qty,0)===qty?breakdown:[];
+      let ers=readStar5Ers(t,stars,qty,verifiedBreakdown);
+      if(stars===5){
+        // A badge may sit beside the title/summary rather than inside the first matched card.
+        // Never read a second model's summary or the whole dialog.
+        let scope=card;
+        for(let i=0;i<3&&scope.parentElement&&scope.parentElement!==p;i++){
+          const parent=scope.parentElement;
+          const raw=parent.innerText||parent.textContent||'';
+          if(raw.length>1000||(raw.match(/최고\s*★\s*[1-5]\s*[·•]?\s*\d+\s*대/g)||[]).length!==1)break;
+          scope=parent;
+          const candidate=readStar5Ers(raw,stars,qty,verifiedBreakdown);
+          if(ers.ersStatus==='not-visible'&&candidate.ersStatus!=='not-visible')ers=candidate;
+          else if(ers.ersStatus==='collected'&&candidate.ersStatus!=='collected')break;
+          else if(ers.ersStatus==='ambiguous'&&candidate.ersStatus==='collected')ers=candidate;
+          if(ers.ersStatus==='collected')break;
+        }
+      }
+      items.push({grade:grade[1],model,stars,qty,breakdown:verifiedBreakdown,...ers});
     }
     const map=new Map();
     for(const v of items) map.set([v.grade,v.model,v.stars].join('|'),v);
@@ -200,7 +230,17 @@
     const oldTop = scroll ? scroll.scrollTop : 0;
     const seen = new Map();
     const collect = () => {
-      for (const v of parseGarage(p)) seen.set([v.grade,v.model,v.stars].join('|'),v);
+      for (const v of parseGarage(p)) {
+        const key=[v.grade,v.model,v.stars].join('|'),old=seen.get(key);
+        if(old&&old.qty===v.qty&&JSON.stringify(old.breakdown)===JSON.stringify(v.breakdown)){
+          if(old.ersStatus==='conflicting'){continue;}
+          if(old.ersStatus==='collected'&&v.ersStatus==='collected'&&JSON.stringify([...old.ersBonuses].sort((a,b)=>a-b))!==JSON.stringify([...v.ersBonuses].sort((a,b)=>a-b))){
+            seen.set(key,{...v,ersBonuses:Array(v.star5Count).fill(null),ersStatus:'conflicting',ersEvidence:[...(old.ersEvidence||[]),...(v.ersEvidence||[])].slice(0,12)});continue;
+          }
+          if(old.ersStatus==='collected'&&v.ersStatus!=='collected')continue;
+        }
+        seen.set(key,v);
+      }
     };
     let complete = !scroll;
     try {
@@ -237,7 +277,7 @@
       if (prev.length && !changes.length) {
         // A successful scan counts as a new scan even when ownership is unchanged.
         // Keep change snapshots/events unchanged; update only last-confirmed scan time.
-        db.garages[actual] = {...db.garages[actual],updatedAt:at,source:'full-popup-scroll'};
+        db.garages[actual] = {...db.garages[actual],vehicles:cars,updatedAt:at,source:'full-popup-scroll'};
         saveGarageOrDefer();
         if (!silent) note(actual+' 차고 변경 없음 ('+cars.length+'종 / '+total+'대) · 조회 '+toKst(at));
         return true;
@@ -313,7 +353,11 @@
         const g=db.garages[user];
         const vehicles=(g?.vehicles||[]).map(v=>({
           grade:v.grade,model:v.model,maxStars:Number(v.stars),
-          quantity:Number(v.qty),starBreakdown:Array.isArray(v.breakdown)?v.breakdown:[]
+          quantity:Number(v.qty),starBreakdown:Array.isArray(v.breakdown)?v.breakdown:[],
+          star5Count:v.star5Count??(v.stars===5?(v.qty===1?1:null):0),
+          ersBonuses:Array.isArray(v.ersBonuses)?v.ersBonuses:[],
+          ersStatus:v.ersStatus||(v.stars===5?'not-collected':'not-applicable'),
+          ersEvidence:Array.isArray(v.ersEvidence)?v.ersEvidence:[]
         }));
         return {user,updatedAt:g?.updatedAt||null,updatedAtKst:toKst(g?.updatedAt),modelCount:vehicles.length,
           vehicleCount:vehicles.reduce((n,v)=>n+v.quantity,0),vehicles};
@@ -431,7 +475,7 @@
         if(!p){results.push({owner,ok:false,reason:'차고 팝업/소유주 확인 실패'});continue;}
         await pause(250);const ok=await captureGarage(true,owner);
         const garage=db.garages[owner];
-        const reason=ok?garage.vehicles.length+'종/'+garage.vehicles.reduce((n,v)=>n+v.qty,0)+'대':(lastCaptureFailure||'차량 수집 실패');
+        const reason=ok?garage.vehicles.length+'종/'+garage.vehicles.reduce((n,v)=>n+v.qty,0)+'대 · ERS '+garage.vehicles.reduce((n,v)=>n+(v.ersBonuses||[]).filter(Number.isInteger).length,0)+'/'+garage.vehicles.reduce((n,v)=>n+(v.star5Count??(v.stars===5?1:0)),0)+'대'+(garage.vehicles.some(v=>v.stars===5&&v.star5Count===null)?' (★5 수량 일부 미확정)':''):(lastCaptureFailure||'차량 수집 실패');
         results.push({owner,ok:!!ok,reason});if(ok)successes++;
         note((i+1)+'/6 '+owner+' '+(ok?'저장':'실패')+' · '+reason);
         if(!closeGarage(p)){results.push({owner,ok:false,reason:'차고 닫기 실패'});break;}
