@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.41
+// @version      3.3.42
 // @description  Release 3.0 / 예측식 동결 / 주행기록 용량초과 대비·이중 보관 및 전송 진단
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
@@ -13,7 +13,7 @@
 'use strict';
 // Avoid duplicate driving engines when the stable unified GitHub loader is active.
 if(window.__duMode&&!window.__duUnifiedLoadingAuto)return;
-const VERSION='3.3.41', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.42', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -36,6 +36,10 @@ const NEAR_BOOST_GAP_GUARD={minTrace:3,minSpeed:.14,maxSpeed:.33,maxRecentGapMs:
 // Primary center scan remains authoritative. A fallback requires both auxiliary columns.
 const SIDE_BOOST_SCAN={offsetPx:12,maxYDifferencePx:3.5,scanIntervalMs:33};
 let lastSideBoostScanAt=0;
+// Missing BOOST markers: bounded cross-column search, not a timer or guessed input.
+// Center observations retain priority; the same-side consensus must be unambiguous.
+const WIDE_BOOST_SCAN={offsets:[-96,-72,-48,-24,24,48,72,96],nearPx:96,centerNearPx:28,maxPastPx:3,maxYDifferencePx:4,scanIntervalMs:15,minSpeed:.035,maxSpeed:.36,maxObservationGapMs:70};
+let lastWideBoostScanAt=-Infinity,lastWideBoostEvidence=null;
 // Sparse BOOST OFF tracks can move past the input line between valid scans.
 // Use strictly consistent velocity samples and a bounded time horizon, not a global lead.
 function evaluateSparseBoostCoast(track,now){
@@ -134,7 +138,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), round=(v,n=3)=>Number((Number(v)
 let raceStartedAtMs=null,raceFinishedAtMs=null;
 let cfg={...DEFAULTS},courseId='default',courseName='기본 코스',courseScope='default',profile='',running=false,started=false,armed=false,destroyed=false,brakeHeld=false,boostHeld=false,boostExpected='boostOn',boostOnCount=0,boostOffCount=0,eventSequence=0,nextTrackId=1,tracks=[],lastFrameTime=0,averageFrameMs=16.67,raf=null,startTimer=null,feedbackObserver=null,feedbackElement=null,lastFeedbackText='',feedbackEmpty=true,lastMessage='대기 중',lastDetected='-',lastFeedback='-',runId='',profileAtStart=null,analysisLastTime=0,analysisLastSpeed=null,analysisLastSpeedTime=0,analysisMaxSpeed=null,analysisSamples=[],analysisAccel=[],analysisEvents=[],profileStatus='미확인';
 const history=[],feedbackLog=[],segmentResults=[],correction={},evidence={},detectionAlerts=[];
-const detectionHealth={lateSpawns:0,trackLongGaps:0,rafLongGaps:0,maxTrackGapMs:0,maxRafGapMs:0,coastTriggers:0,sparseBoostTriggers:0,nearBoostGapTriggers:0,sideBoostBands:0,wheelLockSignalsDuringBoostHeld:0};
+const detectionHealth={lateSpawns:0,trackLongGaps:0,rafLongGaps:0,maxTrackGapMs:0,maxRafGapMs:0,coastTriggers:0,sparseBoostTriggers:0,nearBoostGapTriggers:0,sideBoostBands:0,wideBoostScans:0,wideBoostBands:0,wideBoostAmbiguous:0,wideBoostUnconfirmed:0,wideBoostTriggers:0,wheelLockSignalsDuringBoostHeld:0};
 const stats={perfect:0,great:0,good:0,bad:0,miss:0,unmatched:0,adjusted:0,segmentResults:0};
 const universalStats={highSpeedEvents:0,highSpeedPredictionUsed:0,accelerationUsed:0,accelerationRejected:0,accelerationSamples:0,fallbackCount:0,maximumSpeed:0,maximumAdvancePx:0,totalAdvancePx:0};
 function game(){try{return document.querySelector('iframe[title="타임어택"]')?.contentDocument||null;}catch(_){return null;}}
@@ -224,7 +228,7 @@ function recordWheelLockSignal(raw,source){
   wheelLockObservations.push({timeMs:Math.round(now),source,text:txt.slice(0,200),
     nearestRecentBoostOffKey:nearest?.type==='boostOff'&&now-nearest.time<=1400?nearest.eventKey:null,
     boostHeldAtSignal:boostHeld,boostExpectedAtSignal:boostExpected,
-    lastAutoInputKey:nearest?.eventKey||null,awaitingBoostOffMarker:awaitingOff?{
+    lastAutoInputKey:nearest?.eventKey||null,wideBoostLastEvidence:lastWideBoostEvidence?{...lastWideBoostEvidence,ageMs:round(now-lastWideBoostEvidence.at,2)}:null,awaitingBoostOffMarker:awaitingOff?{
       firstSeenY:round(awaitingOff.firstSeenY,2),lastY:round(awaitingOff.y,2),
       lastAgeMs:round(now-awaitingOff.lastTime,2),observationCount:awaitingOff.observationCount,
       suppressed:!!awaitingOff.suppressed
@@ -285,7 +289,7 @@ function prepareObservation(vehicle){
   // Previous versions persisted partial races before the finish was confirmed.
   // Drop known interrupted run votes from auto-tuning; keep their logs for diagnostics.
   const availableRuns=readSavedRuns();
-  const interruptedIds=new Set(availableRuns.filter(x=>x.complete===false).map(x=>x.runId).filter(Boolean));
+  const interruptedIds=new Set(availableRuns.filter(x=>x.complete===false||hasWheelLockEvidence(x)).map(x=>x.runId).filter(Boolean));
   if(interruptedIds.size)for(const entry of Object.values(observeState.events||{})){
     if(Array.isArray(entry.qualityRecent))
       entry.qualityRecent=entry.qualityRecent.filter(x=>!interruptedIds.has(x.runId));
@@ -295,7 +299,7 @@ function prepareObservation(vehicle){
 // Only the six frames nearest to the input should gate training quality.
 // A long gap much earlier in a track must not discard a clean, visible trigger.
 function validCorrectionSample(record){
-  if(!record||record.observationCount<8||record.lateSpawnSuppressed)return false;
+  if(!record||record.observationCount<8||record.lateSpawnSuppressed||record.wideColumnObservations>0||record.markerReadSource==='verified-wide-columns')return false;
   if(!(record.firstSeenY<record.triggerLineY-DETECTION_GUARD.lateSpawnSlackPx))return false;
   // Check only the four measurements immediately before the input. Earlier sparse
   // scans can be common at high speed, and should not discard a clean near-trigger trace.
@@ -342,11 +346,12 @@ function safeNoRegressionAdvancePx(record){
 // Reconstruct the last runs' graded quality evidence from ORIGINAL local JSON.
 // This upgrades old observation-only traces after code updates without inventing
 // grades or modifying the source records. Called once on race start, never per frame.
+function hasWheelLockEvidence(run){return !!run?.wheelLockObservations?.length||/휠\s*락|wheel\s*lock/i.test(run?.wheelLockResultEvidence?.text||'');}
 function restoreRecentTireEvidence(runs){
   if(!observeState?.events||!Array.isArray(runs))return;
   const rebuilt=new Map();
   for(const old of runs.slice(-40)){
-    if(!old?.complete||old.vehicleKey!==observeState.identity||!Array.isArray(old.history)||!old.history.length)continue;
+    if(!old?.complete||hasWheelLockEvidence(old)||old.vehicleKey!==observeState.identity||!Array.isArray(old.history)||!old.history.length)continue;
     if(old.history.some(x=>!x.feedbackGrade))continue; // all events must be graded
     for(const record of old.history){
       if(!validCorrectionSample(record))continue;
@@ -769,10 +774,11 @@ function saveRun(reason){
     clientDifferenceSec:recordedLapTimeSec!==null&&observedRaceDurationMs!==null?round(recordedLapTimeSec-observedRaceDurationMs/1000,3):null,
     warning:'Use recordedLapTimeSec from the game result/HUD; client elapsed is separate. A finish HUD value is not guaranteed to include all official penalties.'
   };
-  const observationCommitted=complete&&allEvents?commitCompletedObservations():false;
+  const wheelTrainingBlocked=wheelLockObservations.length>0||hasWheelLockEvidence({wheelLockResultEvidence:wheelLockAtFinish});
+   const observationCommitted=complete&&allEvents&&!wheelTrainingBlocked?commitCompletedObservations():false;
   const result={runId,version:VERSION,courseId,courseName,courseScope,vehicle:profileAtStart,vehicleKey:vehicleKey(profileAtStart),manualProfile:profile||null,
-    observationLearning:{mode:'tire-speed-exact-event-confidence-gated',committed:observationCommitted,excludedReason:observationCommitted?null:!complete?'incomplete':!allEvents?'ungraded-events':'no-eligible-observation-or-storage-failed',profileKey:observeState?.identity||null,runFeedback:observeRunCount,runGreat:observeRunGreat,eligibleFeedback:history.filter(x=>x.autoLearningEligible).length,totalProfileFeedback:observeState?.totalFeedback||0,autoCorrectionAppliedEvents:history.filter(x=>x.autoCorrectionPx!==0).length,minSamples:AUTO_TUNE.minSamples},traceCapture:{beforeFrames:TRACE_PRE,afterFrames:TRACE_POST,windowMs:TRACE_WINDOW_MS},
-    reason,complete,observedRaceDurationMs,observedRaceDurationSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),raceDurationSource:observedRaceDurationMs===null?null:'client-start-light-to-first-finish-phase',gameTiming,wheelLockResultEvidence:complete?wheelLockAtFinish:null,wheelLockObservations:wheelLockObservations.slice(),crossTrackFeedback:summarizeCrossTrackFeedback(),completionEvidence:{allEvents,allSegments,phase:root()?.dataset.phase||null},detectionHealth:{...detectionHealth},detectionAlerts:detectionAlerts.slice(),shortGapCoast:{enabled:true,guard:{...COAST_GUARD},triggeredCount:detectionHealth.coastTriggers},sparseBoostCoast:{enabled:true,guard:{...SPARSE_BOOST_GUARD},triggeredCount:detectionHealth.sparseBoostTriggers},nearBoostOffGap:{enabled:true,guard:{...NEAR_BOOST_GAP_GUARD},triggeredCount:detectionHealth.nearBoostGapTriggers},sideBoostScan:{enabled:true,guard:{...SIDE_BOOST_SCAN},bands:detectionHealth.sideBoostBands},ungradedEventKeys:history.filter(x=>x.feedbackGrade===null).map(x=>x.eventKey),time:new Date().toISOString(),
+    observationLearning:{mode:'tire-speed-exact-event-confidence-gated',committed:observationCommitted,excludedReason:observationCommitted?null:!complete?'incomplete':!allEvents?'ungraded-events':wheelTrainingBlocked?'wheel-lock-sequence-unreliable':'no-eligible-observation-or-storage-failed',profileKey:observeState?.identity||null,runFeedback:observeRunCount,runGreat:observeRunGreat,eligibleFeedback:history.filter(x=>x.autoLearningEligible).length,totalProfileFeedback:observeState?.totalFeedback||0,autoCorrectionAppliedEvents:history.filter(x=>x.autoCorrectionPx!==0).length,minSamples:AUTO_TUNE.minSamples},traceCapture:{beforeFrames:TRACE_PRE,afterFrames:TRACE_POST,windowMs:TRACE_WINDOW_MS},
+    reason,complete,observedRaceDurationMs,observedRaceDurationSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),raceDurationSource:observedRaceDurationMs===null?null:'client-start-light-to-first-finish-phase',gameTiming,wheelLockResultEvidence:complete?wheelLockAtFinish:null,wheelLockObservations:wheelLockObservations.slice(),crossTrackFeedback:summarizeCrossTrackFeedback(),completionEvidence:{allEvents,allSegments,phase:root()?.dataset.phase||null},detectionHealth:{...detectionHealth},detectionAlerts:detectionAlerts.slice(),shortGapCoast:{enabled:true,guard:{...COAST_GUARD},triggeredCount:detectionHealth.coastTriggers},sparseBoostCoast:{enabled:true,guard:{...SPARSE_BOOST_GUARD},triggeredCount:detectionHealth.sparseBoostTriggers},nearBoostOffGap:{enabled:true,guard:{...NEAR_BOOST_GAP_GUARD},triggeredCount:detectionHealth.nearBoostGapTriggers},sideBoostScan:{enabled:true,guard:{...SIDE_BOOST_SCAN},bands:detectionHealth.sideBoostBands},wideBoostScan:{enabled:true,guard:{...WIDE_BOOST_SCAN},scans:detectionHealth.wideBoostScans,bands:detectionHealth.wideBoostBands,ambiguous:detectionHealth.wideBoostAmbiguous,triggers:detectionHealth.wideBoostTriggers},ungradedEventKeys:history.filter(x=>x.feedbackGrade===null).map(x=>x.eventKey),time:new Date().toISOString(),
     // Keep the canonical instant in UTC and add its KST ISO-8601 representation.
     // Using the UTC instant (rather than the device's local clock formatting) avoids a second +9h shift.
     timeKst:null,timeZone:'Asia/Seoul',
@@ -834,6 +840,45 @@ function scanColumnBands(canvas,x,top,bottom){
   }
   finish();return bands;
 }
+// Find one unambiguous same-side pair. Opposite-side matches alone do not prove a band.
+function chooseWideBoostBand(columns,expected,guard=WIDE_BOOST_SCAN){
+  const pairs=[];
+  for(let i=1;i<columns.length;i++){
+    const a=columns[i-1],b=columns[i];
+    if(Math.sign(a.offset)!==Math.sign(b.offset)||b.offset-a.offset!==24)continue;
+    for(const p of a.bands)for(const q of b.bands){
+      if(p.type===expected&&q.type===expected&&Math.abs(p.y-q.y)<=guard.maxYDifferencePx)
+        pairs.push({y:(p.y+q.y)/2,offsets:[a.offset,b.offset]});
+    }
+  }
+  if(!pairs.length)return {band:null,ambiguous:false};
+  const ys=pairs.map(p=>p.y);
+  if(Math.max(...ys)-Math.min(...ys)>guard.maxYDifferencePx)return {band:null,ambiguous:true};
+  const chosen=pairs.reduce((a,b)=>Math.abs(a.offsets[0])+Math.abs(a.offsets[1])<=Math.abs(b.offsets[0])+Math.abs(b.offsets[1])?a:b);
+  return {band:{type:expected,y:chosen.y,readSource:'verified-wide-columns',wideOffsets:chosen.offsets},ambiguous:false};
+}
+function scanWideBoostBands(canvas,x,top,bottom,expected){
+  const g=WIDE_BOOST_SCAN,lo=Math.max(0,x+g.offsets[0]),hi=Math.min(canvas.width-1,x+g.offsets.at(-1));
+  if(hi<lo||bottom<=top)return {band:null,ambiguous:false};
+  const width=hi-lo+1;
+  let pixels;try{pixels=canvas.getContext('2d').getImageData(lo,top,width,bottom-top).data;}catch(_){return {band:null,ambiguous:false};}
+  const columns=[];
+  for(const offset of g.offsets){
+    const cx=x+offset;if(cx<lo||cx>hi)continue;
+    const bands=[];let start=-1,end=-1,count=0;
+    function finish(){if(count>=cfg.minBandPixels)bands.push({type:expected,y:(start+end)/2});start=-1;end=-1;count=0;}
+    for(let y=top;y<bottom;y++){
+      const p=((y-top)*width+cx-lo)*4;
+      if(classify(pixels[p],pixels[p+1],pixels[p+2])===expected){
+        if(count&&y-end>2)finish();
+        if(!count)start=y;
+        end=y;count++;
+      }else finish();
+    }
+    finish();columns.push({offset,bands});
+  }
+  return chooseWideBoostBand(columns,expected);
+}
 function scanBands(now){
   const canvas=game()?.querySelector('canvas[aria-label="타임어택 주행 트랙"]');
   if(!canvas)return [];
@@ -841,35 +886,60 @@ function scanBands(now){
     bottom=clamp(Math.ceil(cfg.scanBottom),0,canvas.height);
   if(x<0||x>=canvas.width||bottom<=top)return [];
   const primary=scanColumnBands(canvas,x,top,bottom);
-  if(!boostHeld||boostExpected!=='boostOff'||primary.some(b=>b.type==='boostOff')
-    ||now-lastSideBoostScanAt<SIDE_BOOST_SCAN.scanIntervalMs)return primary;
-  lastSideBoostScanAt=now;
-  const left=scanColumnBands(canvas,x-SIDE_BOOST_SCAN.offsetPx,top,bottom);
-  const right=scanColumnBands(canvas,x+SIDE_BOOST_SCAN.offsetPx,top,bottom);
   const extra=[];
-  for(const band of left){
-    if(band.type!=='boostOff')continue;
-    const peer=right.find(b=>b.type==='boostOff'&&Math.abs(b.y-band.y)<=SIDE_BOOST_SCAN.maxYDifferencePx);
-    if(!peer)continue;
-    const y=(band.y+peer.y)/2;
-    if(primary.some(b=>b.type==='boostOff'&&Math.abs(b.y-y)<=8))continue;
-    extra.push({type:'boostOff',y,readSource:'verified-side-columns'});
-    detectionHealth.sideBoostBands++;
-    if(extra.length>=2)break;
+  // Preserve the v3.3.41 fallback exactly when its original conditions hold.
+  if(boostHeld&&boostExpected==='boostOff'&&!primary.some(b=>b.type==='boostOff')
+      &&now-lastSideBoostScanAt>=SIDE_BOOST_SCAN.scanIntervalMs){
+    lastSideBoostScanAt=now;
+    const left=scanColumnBands(canvas,x-SIDE_BOOST_SCAN.offsetPx,top,bottom);
+    const right=scanColumnBands(canvas,x+SIDE_BOOST_SCAN.offsetPx,top,bottom);
+    for(const band of left){
+      if(band.type!=='boostOff')continue;
+      const peer=right.find(b=>b.type==='boostOff'&&Math.abs(b.y-band.y)<=SIDE_BOOST_SCAN.maxYDifferencePx);
+      if(!peer)continue;
+      const y=(band.y+peer.y)/2;
+      if(primary.some(b=>b.type==='boostOff'&&Math.abs(b.y-y)<=8))continue;
+      extra.push({type:'boostOff',y,readSource:'verified-side-columns'});
+      detectionHealth.sideBoostBands++;
+      if(extra.length>=2)break;
+    }
   }
-  return extra.length?primary.concat(extra):primary;
+  const combined=primary.concat(extra),g=WIDE_BOOST_SCAN,line=cfg.boostY-cfg.tolerance;
+  const expected=boostHeld&&boostExpected==='boostOff'?'boostOff':!boostHeld&&boostExpected==='boostOn'&&(cfg.boostZones===0||boostOnCount<cfg.boostZones)?'boostOn':null;
+  if(!expected||combined.some(b=>b.type===expected&&b.y>=line-g.centerNearPx&&b.y<=line+g.maxPastPx)
+      ||now-lastWideBoostScanAt<g.scanIntervalMs)return combined;
+  const scanTop=Math.max(top,Math.floor(line-g.nearPx)),scanBottom=Math.min(bottom,Math.ceil(line+g.maxPastPx+1));
+  if(scanBottom<=scanTop)return combined;
+  lastWideBoostScanAt=now;detectionHealth.wideBoostScans++;
+  const candidate=scanWideBoostBands(canvas,x,scanTop,scanBottom,expected);
+  lastWideBoostEvidence={at:round(now,2),expected,y:candidate.band?.y??null,offsets:candidate.band?.wideOffsets??null,ambiguous:candidate.ambiguous};
+  if(candidate.ambiguous)detectionHealth.wideBoostAmbiguous++;
+  if(!candidate.band||combined.some(b=>b.type===expected&&Math.abs(b.y-candidate.band.y)<=8))return combined;
+  detectionHealth.wideBoostBands++;return combined.concat(candidate.band);
+}
+function wideBoostTrackReady(track,line){
+  const g=WIDE_BOOST_SCAN;
+  return track.wideConsecutive>=2&&track.firstSeenY<line&&track.y<=line+g.maxPastPx
+    &&track.lastObservationGapMs>0&&track.lastObservationGapMs<=g.maxObservationGapMs
+    &&track.wideForwardMotion===true&&track.speed>=g.minSpeed&&track.speed<=g.maxSpeed;
+}
+function wideBoostMatch(track,band,now){
+  const dt=now-track.lastTime,delta=band.y-track.y;
+  if(!(dt>0&&dt<=WIDE_BOOST_SCAN.maxObservationGapMs)||delta<-.5||delta>WIDE_BOOST_SCAN.maxSpeed*dt+3)return false;
+  return Math.abs(delta-Math.max(0,track.speed||0)*dt)<=Math.max(4,dt*.12);
 }
 function updateFrameTiming(now){if(lastFrameTime){const dt=now-lastFrameTime;if(dt>DETECTION_GUARD.rafGapMs){detectionHealth.rafLongGaps++;detectionHealth.maxRafGapMs=Math.max(detectionHealth.maxRafGapMs,dt);}if(dt>0&&dt<=ENGINE.maxFrameMs)averageFrameMs=averageFrameMs*.85+dt*.15;}lastFrameTime=now;}
 function updateAcceleration(track,speed,dt){if(dt<4||dt>60||!Number.isFinite(speed))return;const previous=track.previousInstantSpeed;track.previousInstantSpeed=speed;if(!Number.isFinite(previous))return;const raw=(speed-previous)/dt;if(!Number.isFinite(raw)||Math.abs(raw)>ENGINE.accelerationMaxAbs){track.accelerationStable=false;universalStats.accelerationRejected++;return;}track.acceleration=track.acceleration*(1-ENGINE.accelerationSmoothing)+raw*ENGINE.accelerationSmoothing;track.accelerationSamples++;universalStats.accelerationSamples++;track.accelerationStable=Math.abs(raw-track.acceleration)<=ENGINE.accelerationStableThreshold;}
 // v3.3.5 predict(): 숫자·조건·보정식 그대로 유지.
 function predict(track){const speed=Math.max(0,track.speed);const adaptiveMs=clamp(averageFrameMs*ENGINE.frameFactor,0,ENGINE.maxAdaptiveMs);const leadMs=Math.max(0,adaptiveMs+cfg.predictionMs);const basePredictionPx=clamp(speed*leadMs,0,ENGINE.maxPredictionPx);const speedRatio=clamp((speed-ENGINE.highSpeedStart)/(ENGINE.highSpeedFull-ENGINE.highSpeedStart),0,1);const frameAdvancePx=clamp(speed*averageFrameMs*ENGINE.frameLookaheadFactor*speedRatio,0,ENGINE.maxHighSpeedAdvancePx);let accelerationPx=0,accelerationUsed=false;if(track.accelerationSamples>=ENGINE.accelerationMinSamples&&track.accelerationStable&&speedRatio>0){const extra=.5*track.acceleration*leadMs*leadMs;accelerationPx=clamp(extra*speedRatio,-ENGINE.accelerationMaxPx,ENGINE.accelerationMaxPx);accelerationUsed=Math.abs(accelerationPx)>=.02;}const highSpeedAdvancePx=frameAdvancePx;const predictionPx=clamp(basePredictionPx+highSpeedAdvancePx+accelerationPx,0,ENGINE.maxPredictionPx+ENGINE.maxHighSpeedAdvancePx+ENGINE.accelerationMaxPx);const highSpeedUsed=highSpeedAdvancePx>.01;return {speed,leadMs,basePredictionPx,frameAdvancePx,highSpeedAdvancePx,accelerationPx,accelerationUsed,highSpeedUsed,predictionPx,predictionMode:highSpeedUsed?'high-speed-lookahead':'release-2.0'};}
-function executeEvent(track,predictedY,prediction,eventKey,target,autoLead,triggerMeta=null){const type=track.type;let success=false;if(type==='brakeOn'&&!brakeHeld)success=brake(true);else if(type==='brakeOff'&&brakeHeld)success=brake(false);else if(type==='boostOn'&&boostExpected==='boostOn'&&!boostHeld&&(cfg.boostZones===0||boostOnCount<cfg.boostZones)){success=boost(true);if(success)boostExpected='boostOff';}else if(type==='boostOff'&&boostExpected==='boostOff'&&boostHeld){success=boost(false);if(success)boostExpected='boostOn';}if(!success)return false;const time=nowMs(),previous=history[history.length-1];eventSequence++;const record={sequence:eventSequence,eventKey,type,event:LABELS[type],markerReadSource:track.lastMarkerReadSource||'center',sideColumnObservations:track.sideColumnObservations||0,y:round(track.y,2),predictedY:round(predictedY,3),targetY:target,triggerLineY:target-cfg.tolerance,speed:round(track.speed,5),acceleration:round(track.acceleration,7),accelerationSamples:track.accelerationSamples,accelerationStable:track.accelerationStable,predictionMode:prediction.predictionMode,basePredictionPx:round(prediction.basePredictionPx,4),frameAdvancePx:round(prediction.frameAdvancePx,4),highSpeedAdvancePx:round(prediction.highSpeedAdvancePx,4),accelerationPredictionPx:round(prediction.accelerationPx,4),accelerationUsed:prediction.accelerationUsed,highSpeedUsed:prediction.highSpeedUsed,adaptiveLeadMs:round(prediction.leadMs,3),adaptivePredictionPx:round(prediction.predictionPx,4),averageFrameMs:round(averageFrameMs,3),distanceToTriggerPx:round(target-cfg.tolerance-track.y,4),estimatedFrameTravelPx:round(track.speed*averageFrameMs,4),time:Math.round(time),previousEvent:previous?.type||null,previousGapMs:previous?Math.round(time-previous.time):null,appliedCorrection:correction[eventKey]||0,autoCorrectionPx:autoLead?.px||0,autoCorrectionBasis:autoLead?.reason||'none',autoCorrectionSamples:autoLead?.samples||0,autoCorrectionRuns:autoLead?.runs||0,tireSpeedGuard:{tire:profileAtStart?.tire||null,markerSpeedPxMs:round(track.speed,5),frameMs:round(averageFrameMs,3)},effectiveCorrectionPx:(correction[eventKey]||0)+(autoLead?.px||0),firstSeenY:round(track.firstSeenY,2),observationCount:track.observationCount,maxObservationGapMs:round(track.maxObservationGapMs||0,2),lastObservationGapMs:round(track.lastObservationGapMs||0,2),lateSpawnSuppressed:!!track.suppressed,triggerSource:triggerMeta?.source||'visible',triggerGapMs:triggerMeta?.gapMs??0,triggerEstimatedY:triggerMeta?.estimatedMarkerY??null,triggerPredictedOvershootPx:triggerMeta?.predictedOvershootPx??null,triggerAnticipationPx:triggerMeta?.anticipationPx??0,feedbackGrade:null,feedbackDirection:null,feedbackDistanceM:null,feedback:null,feedbackTime:null};history.push(record);beginEventTrace(track,record,time);if(history.length>ENGINE.maxHistory)history.shift();if(prediction.highSpeedUsed){universalStats.highSpeedEvents++;universalStats.highSpeedPredictionUsed++;universalStats.totalAdvancePx+=prediction.highSpeedAdvancePx;universalStats.maximumAdvancePx=Math.max(universalStats.maximumAdvancePx,prediction.highSpeedAdvancePx);}else universalStats.fallbackCount++;if(prediction.accelerationUsed)universalStats.accelerationUsed++;analysisEvents.push({time:round(time,1),sequence:eventSequence,type,markerSpeedPxMs:round(track.speed,5),markerAccelerationPxMs2:round(track.acceleration,7),liveSpeedKmh:analysisLastSpeed});setMessage(LABELS[type]+' 실행');return true;}
+function executeEvent(track,predictedY,prediction,eventKey,target,autoLead,triggerMeta=null){const type=track.type;let success=false;if(type==='brakeOn'&&!brakeHeld)success=brake(true);else if(type==='brakeOff'&&brakeHeld)success=brake(false);else if(type==='boostOn'&&boostExpected==='boostOn'&&!boostHeld&&(cfg.boostZones===0||boostOnCount<cfg.boostZones)){success=boost(true);if(success)boostExpected='boostOff';}else if(type==='boostOff'&&boostExpected==='boostOff'&&boostHeld){success=boost(false);if(success)boostExpected='boostOn';}if(!success)return false;const time=nowMs(),previous=history[history.length-1];eventSequence++;const record={sequence:eventSequence,eventKey,type,event:LABELS[type],markerReadSource:track.lastMarkerReadSource||'center',sideColumnObservations:track.sideColumnObservations||0,wideColumnObservations:track.wideColumnObservations||0,wideColumnOffsets:track.lastWideOffsets||null,y:round(track.y,2),predictedY:round(predictedY,3),targetY:target,triggerLineY:target-cfg.tolerance,speed:round(track.speed,5),acceleration:round(track.acceleration,7),accelerationSamples:track.accelerationSamples,accelerationStable:track.accelerationStable,predictionMode:prediction.predictionMode,basePredictionPx:round(prediction.basePredictionPx,4),frameAdvancePx:round(prediction.frameAdvancePx,4),highSpeedAdvancePx:round(prediction.highSpeedAdvancePx,4),accelerationPredictionPx:round(prediction.accelerationPx,4),accelerationUsed:prediction.accelerationUsed,highSpeedUsed:prediction.highSpeedUsed,adaptiveLeadMs:round(prediction.leadMs,3),adaptivePredictionPx:round(prediction.predictionPx,4),averageFrameMs:round(averageFrameMs,3),distanceToTriggerPx:round(target-cfg.tolerance-track.y,4),estimatedFrameTravelPx:round(track.speed*averageFrameMs,4),time:Math.round(time),previousEvent:previous?.type||null,previousGapMs:previous?Math.round(time-previous.time):null,appliedCorrection:correction[eventKey]||0,autoCorrectionPx:autoLead?.px||0,autoCorrectionBasis:autoLead?.reason||'none',autoCorrectionSamples:autoLead?.samples||0,autoCorrectionRuns:autoLead?.runs||0,tireSpeedGuard:{tire:profileAtStart?.tire||null,markerSpeedPxMs:round(track.speed,5),frameMs:round(averageFrameMs,3)},effectiveCorrectionPx:(correction[eventKey]||0)+(autoLead?.px||0),firstSeenY:round(track.firstSeenY,2),observationCount:track.observationCount,maxObservationGapMs:round(track.maxObservationGapMs||0,2),lastObservationGapMs:round(track.lastObservationGapMs||0,2),lateSpawnSuppressed:!!track.suppressed,triggerSource:triggerMeta?.source||'visible',triggerGapMs:triggerMeta?.gapMs??0,triggerEstimatedY:triggerMeta?.estimatedMarkerY??null,triggerPredictedOvershootPx:triggerMeta?.predictedOvershootPx??null,triggerAnticipationPx:triggerMeta?.anticipationPx??0,feedbackGrade:null,feedbackDirection:null,feedbackDistanceM:null,feedback:null,feedbackTime:null};history.push(record);beginEventTrace(track,record,time);if(history.length>ENGINE.maxHistory)history.shift();if(prediction.highSpeedUsed){universalStats.highSpeedEvents++;universalStats.highSpeedPredictionUsed++;universalStats.totalAdvancePx+=prediction.highSpeedAdvancePx;universalStats.maximumAdvancePx=Math.max(universalStats.maximumAdvancePx,prediction.highSpeedAdvancePx);}else universalStats.fallbackCount++;if(prediction.accelerationUsed)universalStats.accelerationUsed++;analysisEvents.push({time:round(time,1),sequence:eventSequence,type,markerSpeedPxMs:round(track.speed,5),markerAccelerationPxMs2:round(track.acceleration,7),liveSpeedKmh:analysisLastSpeed});setMessage(LABELS[type]+' 실행');return true;}
 function updateTracks(bands,now){
-  const used=new Set(),sorted=[...bands].sort((a,b)=>b.y-a.y);
+  const used=new Set(),sorted=[...bands].sort((a,b)=>Number(a.readSource==='verified-wide-columns')-Number(b.readSource==='verified-wide-columns')||b.y-a.y);
   for(const band of sorted){
     let best=null,distance=Infinity;
     for(const track of tracks){
       if(used.has(track.id)||track.type!==band.type)continue;
+      if(band.readSource==='verified-wide-columns'&&!wideBoostMatch(track,band,now))continue;
       const delta=band.y-track.y;
       if(delta>=-8&&delta<cfg.matchDistance&&Math.abs(delta)<distance){best=track;distance=Math.abs(delta);}
     }
@@ -881,6 +951,7 @@ function updateTracks(bands,now){
       tracks.push(best);
     }else{
       const dt=now-best.lastTime,dy=band.y-best.y;
+      if(band.readSource==='verified-wide-columns')best.wideForwardMotion=dy>0&&dt>0&&dt<=WIDE_BOOST_SCAN.maxObservationGapMs;
       best.observationCount++;
       best.lastObservationGapMs=dt>0?dt:0;
       best.maxObservationGapMs=Math.max(best.maxObservationGapMs,best.lastObservationGapMs);
@@ -900,6 +971,11 @@ function updateTracks(bands,now){
       best.y=band.y;best.lastTime=now;best.missing=0;
     }
     used.add(best.id);
+    if(band.readSource==='verified-wide-columns'){
+      best.wideConsecutive=best.lastMarkerReadSource==='verified-wide-columns'&&!best.missing&&best.lastObservationGapMs<=WIDE_BOOST_SCAN.maxObservationGapMs?(best.wideConsecutive||0)+1:1;
+      best.wideColumnObservations=(best.wideColumnObservations||0)+1;best.lastWideOffsets=band.wideOffsets||null;
+      best.wideOnly=best.wideOnly!==false&&!best.centerObserved;
+    }else{best.wideConsecutive=0;best.wideOnly=false;if(!band.readSource)best.centerObserved=true;}
     best.lastMarkerReadSource=band.readSource||'center';
     if(band.readSource==='verified-side-columns')best.sideColumnObservations=(best.sideColumnObservations||0)+1;
     captureTrackFrame(best,now);
@@ -920,12 +996,15 @@ function updateTracks(bands,now){
     const predictedY=best.y+prediction.predictionPx+offset+(correction[eventKey]||0)+autoLead.px;
     lastDetected=LABELS[best.type]+' Y='+round(best.y,1)+(best.suppressed?' (늦게 등장·입력 차단)':'');
     if(!best.triggered&&!best.suppressed&&predictedY>=triggerLine){
-      const source=best.lastMarkerReadSource==='verified-side-columns'?'verified-side-columns':'visible';
-      if(executeEvent(best,predictedY,prediction,eventKey,target,autoLead,{source}))best.triggered=true;
+      const wide=best.lastMarkerReadSource==='verified-wide-columns';
+      if(wide&&!wideBoostTrackReady(best,triggerLine)){detectionHealth.wideBoostUnconfirmed++;continue;}
+      const source=wide?'verified-wide-columns':best.lastMarkerReadSource==='verified-side-columns'?'verified-side-columns':'visible';
+      if(executeEvent(best,predictedY,prediction,eventKey,target,autoLead,{source})){best.triggered=true;if(wide)detectionHealth.wideBoostTriggers++;}
     }
   }
   for(const track of tracks)if(!used.has(track.id)){
-    if(!tryShortGapCoast(track,now)&&!tryNearBoostOffGap(track,now))trySparseBoostCoast(track,now);
+    // A wide-column-only candidate is never extrapolated into an input.
+    if(!track.wideOnly&&!tryShortGapCoast(track,now)&&!tryNearBoostOffGap(track,now))trySparseBoostCoast(track,now);
     track.missing++;
   }
   tracks=tracks.filter(track=>track.missing<=12);
@@ -962,7 +1041,7 @@ function drive(now){
   raf=requestAnimationFrame(drive);
 }
 function stop(show=true,reason=null){const wasRunning=running;running=false;if(startTimer!==null){clearInterval(startTimer);startTimer=null;}if(raf!==null){cancelAnimationFrame(raf);raf=null;}brake(false);if(boostHeld){send('.boost-key',false);boostHeld=false;}feedbackObserver?.disconnect();feedbackObserver=null;feedbackElement=null;started=false;armed=false;tracks=[];if(wasRunning)saveRun(reason||'stopped');if(show)setMessage('자동 플레이 중지');}
-function start(){stop(false);stopAfterCurrent=false;detectCourse();const doc=game();if(!doc){setMessage('타임어택 화면 없음');return;}if(root()?.dataset.phase!=='ready'){setMessage('게임 재시작 후 실행하세요');return;}refreshVehicle();profileAtStart=structuredCloneSafe(detected);prepareObservation(profileAtStart);running=true;started=false;armed=false;runId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);tracks=[];nextTrackId=1;eventSequence=0;lastFrameTime=0;averageFrameMs=16.67;boostOnCount=0;boostOffCount=0;boostExpected='boostOn';history.length=0;feedbackLog.length=0;segmentResults.length=0;detectionAlerts.length=0;for(const key of Object.keys(detectionHealth))detectionHealth[key]=0;analysisSamples=[];analysisAccel=[];analysisEvents=[];analysisLastTime=0;analysisLastSpeed=null;analysisLastSpeedTime=0;analysisMaxSpeed=null;runFinalized=false;finishSeenAt=0;finishReason=null;raceStartedAtMs=null;raceFinishedAtMs=null;telemetryRejects=0;gameClockPoll=0;gameClockLast=null;gameClockAtFinish=null;gameClockSource=null;gameClockCount=0;gameClockTrace=[];wheelLockAtFinish=null;wheelLockObservations=[];lastSideBoostScanAt=0;for(const k of Object.keys(stats))stats[k]=0;for(const k of Object.keys(universalStats))universalStats[k]=0;lastFeedback='-';lastDetected='-';lastFeedbackText='';feedbackEmpty=true;connectFeedbackObserver();brake(true);setMessage('출발 신호 대기 중');const lights=[...doc.querySelectorAll('.lights i')];startTimer=setInterval(()=>{if(!running)return;const active=lights.filter(el=>{const rgb=doc.defaultView.getComputedStyle(el).backgroundColor.match(/\d+/g)?.map(Number);return rgb&&rgb[0]>110&&rgb[0]>rgb[1]*1.35&&rgb[0]>rgb[2]*1.35;}).length;if(active===5)armed=true;if(armed&&active===0){clearInterval(startTimer);startTimer=null;brake(false);raceStartedAtMs=performance.now();started=true;setMessage('자동 출발 성공');}},10);raf=requestAnimationFrame(drive);/* Keep panel state independent from driving. */}
+function start(){stop(false);stopAfterCurrent=false;detectCourse();const doc=game();if(!doc){setMessage('타임어택 화면 없음');return;}if(root()?.dataset.phase!=='ready'){setMessage('게임 재시작 후 실행하세요');return;}refreshVehicle();profileAtStart=structuredCloneSafe(detected);prepareObservation(profileAtStart);running=true;started=false;armed=false;runId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);tracks=[];nextTrackId=1;eventSequence=0;lastFrameTime=0;averageFrameMs=16.67;boostOnCount=0;boostOffCount=0;boostExpected='boostOn';history.length=0;feedbackLog.length=0;segmentResults.length=0;detectionAlerts.length=0;for(const key of Object.keys(detectionHealth))detectionHealth[key]=0;analysisSamples=[];analysisAccel=[];analysisEvents=[];analysisLastTime=0;analysisLastSpeed=null;analysisLastSpeedTime=0;analysisMaxSpeed=null;runFinalized=false;finishSeenAt=0;finishReason=null;raceStartedAtMs=null;raceFinishedAtMs=null;telemetryRejects=0;gameClockPoll=0;gameClockLast=null;gameClockAtFinish=null;gameClockSource=null;gameClockCount=0;gameClockTrace=[];wheelLockAtFinish=null;wheelLockObservations=[];lastSideBoostScanAt=0;lastWideBoostScanAt=-Infinity;lastWideBoostEvidence=null;for(const k of Object.keys(stats))stats[k]=0;for(const k of Object.keys(universalStats))universalStats[k]=0;lastFeedback='-';lastDetected='-';lastFeedbackText='';feedbackEmpty=true;connectFeedbackObserver();brake(true);setMessage('출발 신호 대기 중');const lights=[...doc.querySelectorAll('.lights i')];startTimer=setInterval(()=>{if(!running)return;const active=lights.filter(el=>{const rgb=doc.defaultView.getComputedStyle(el).backgroundColor.match(/\d+/g)?.map(Number);return rgb&&rgb[0]>110&&rgb[0]>rgb[1]*1.35&&rgb[0]>rgb[2]*1.35;}).length;if(active===5)armed=true;if(armed&&active===0){clearInterval(startTimer);startTimer=null;brake(false);raceStartedAtMs=performance.now();started=true;setMessage('자동 출발 성공');}},10);raf=requestAnimationFrame(drive);/* Keep panel state independent from driving. */}
 function structuredCloneSafe(o){return JSON.parse(JSON.stringify(o||{}));}
 const ui=document.createElement('div');ui.id='dopamine-auto-v336-ui';ui.style.cssText='position:fixed;left:0;top:0;width:0;height:0;z-index:2147483647;font:12px system-ui,sans-serif;color:white;pointer-events:none';
 ui.innerHTML=`<style>#dopamine-auto-v336-ui *{box-sizing:border-box}#dopamine-auto-v336-ui button{color:white;border:0;font-weight:700;cursor:pointer;font-family:inherit}#dopamine-auto-v336-ui .panel{display:none;position:fixed;width:248px;max-width:calc(100vw - 16px);background:#142034;border:1px solid #64748b;border-radius:12px 12px 0 12px;box-shadow:0 5px 25px #000a;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;touch-action:pan-y;pointer-events:auto;padding:10px}#dopamine-auto-v336-ui .mini{position:fixed;width:94px;height:42px;display:flex;align-items:center;justify-content:center;background:#17283d;border:1px solid #64748b;border-radius:24px;box-shadow:0 3px 15px #0008;user-select:none;touch-action:none;pointer-events:auto;padding:0;white-space:nowrap}#dopamine-auto-v336-ui .head-title{font-size:12px;font-weight:800;margin-bottom:6px}#dopamine-auto-v336-ui .course{color:#93c5fd;font-size:10px;margin:5px 0;overflow-wrap:anywhere;white-space:pre-wrap}#dopamine-auto-v336-ui .actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}#dopamine-auto-v336-ui .actions button{padding:9px 5px;border-radius:6px}#dopamine-auto-v336-ui .start{background:#15803d}#dopamine-auto-v336-ui .stop{background:#b91c1c}#dopamine-auto-v336-ui .stats{font-size:10px;line-height:1.5;color:#dbeafe;white-space:pre-wrap;overflow-wrap:anywhere}#dopamine-auto-v336-ui details{margin-top:7px;border-top:1px solid #475569;padding-top:7px}#dopamine-auto-v336-ui summary{color:#93c5fd;font-weight:700;cursor:pointer;padding:4px 0}#dopamine-auto-v336-ui label{display:block;margin:7px 0 3px;color:#cbd5e1;font-size:10px}#dopamine-auto-v336-ui input{display:block;width:100%;padding:7px;background:#1e293b;color:white;border:1px solid #64748b;border-radius:5px;font-size:12px}#dopamine-auto-v336-ui .subbutton{width:100%;margin-top:7px;padding:9px;border-radius:6px;background:#2563eb}#dopamine-auto-v336-ui .reset{background:#475569}#dopamine-auto-v336-ui .hint{font-size:10px;color:#fcd34d;line-height:1.4;margin:5px 0}#dopamine-auto-v336-ui .auto-head{display:flex;justify-content:space-between;align-items:center;gap:5px;margin-bottom:10px;font-size:12px}#dopamine-auto-v336-ui .auto-head button{background:#334155;border-radius:7px;padding:6px 10px;font-size:17px}#dopamine-auto-v336-ui .auto-line{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:8px 0;font-size:11px}#dopamine-auto-v336-ui .auto-line>span:first-child{color:#94a3b8}#dopamine-auto-v336-ui #manage-area{margin-top:10px;border-top:1px solid #475569;padding-top:8px}#dopamine-auto-v336-ui #cloud-config-slot button{position:static!important;width:100%;margin-top:7px;padding:9px;background:#164e63;border:1px solid #67e8f9;border-radius:6px}#dopamine-auto-v336-ui .panel{width:248px}#dopamine-auto-v336-ui .tabs{display:flex;gap:5px;margin:5px 0 10px}#dopamine-auto-v336-ui .tabs button{flex:1;background:#334155;border-radius:7px;padding:9px 3px;font-size:11px}#dopamine-auto-v336-ui .tabs button.active{background:#2563eb}#dopamine-auto-v336-ui .analysis-box{font-size:11px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;color:#dbeafe}</style><div class="panel" id="auto-panel"><div class="auto-head"><strong>🚗 DOPAMINE AUTO <span style="font-size:10px;color:#94a3b8">v${VERSION}</span></strong><button id="manage-btn" aria-label="관리 메뉴 열기" title="관리 메뉴">⚙</button></div><div class="tabs"><button id="tab-auto" class="active">🏎️ AUTO</button><button id="tab-analysis">📊 차량 분석</button></div><div id="auto-tab"><div class="auto-line"><span>상태</span><strong id="simple-state">대기 중</strong></div><div class="auto-line"><span>잔여 타이어</span><strong id="simple-tires">확인 전</strong></div><div class="actions"><button class="start" id="start-btn">▶ 1판 시작</button><button class="stop" id="stop-btn">■ 현재 판 후 중지</button></div><label>연속 실행 횟수 (0=실제 잔여 타이어 모두)</label><input id="chain-run-limit" type="number" min="0" max="18" step="1" value="0"><button class="subbutton" id="chain-btn" style="background:#0f766e">🔁 지정 횟수 연속 주행</button><div class="auto-line" style="margin-top:8px"><span>☁ Google Sheets</span><span id="cloud-state">로더에서 확인</span></div><div id="manage-area" style="display:none"><div class="course" id="course-name">코스 분석 대기</div><div class="stats" id="chain-status"></div><div class="stats" id="status">대기 중</div><div class="stats" id="vehicle-info"></div><p class="hint">자동 인식은 화면 DOM 확인이 필요합니다.</p><button class="subbutton" id="detect-btn">🔍 차량·타이어 다시 읽기</button><button class="subbutton" id="analysis-copy">📊 누적 분석 JSON 복사</button><button class="subbutton" id="analysis-download">💾 누적 분석 JSON 저장</button><button class="subbutton" id="copy-btn">📋 현재 입력 기록 복사</button><button class="subbutton reset" id="force-stop-btn">⛔ 긴급 즉시 중지</button><div id="cloud-config-slot"></div><details id="settings-details"><summary>⚙ 고급 설정</summary><label>기존 수동 프로필 (학습 보정 키)</label><input id="vehicleProfile" type="text" placeholder="비우면 기존 학습 보정 비활성"><label>브레이크 판정선 Y</label><input id="brakeY" type="number"><label>부스터 판정선 Y</label><input id="boostY" type="number"><label>브레이크 보정 px</label><input id="brakeOffset" type="number"><label>부스터 보정 px</label><input id="boostOffset" type="number"><label>예측 시간 ms</label><input id="predictionMs" type="number"><label>부스터 구간 수 (0=자동)</label><input id="boostZones" type="number"><label>색상 허용 오차</label><input id="colorTolerance" type="number"><label>판정 허용 오차 px</label><input id="tolerance" type="number"><button class="subbutton" id="save-btn">설정 저장</button><button class="subbutton reset" id="reset-btn">기본 설정 복원</button></details></div></div><div id="analysis-tab" style="display:none"><div class="analysis-box" id="analysis-summary">기록 분석 대기</div><button class="subbutton" id="analysis-refresh">🔄 분석 새로고침</button><button class="subbutton" id="analysis-copy2">📋 누적 기록 복사</button></div></div><button class="mini" id="auto-mini">🚗 AUTO</button>`;
