@@ -1,15 +1,15 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-25T12:34:30.329Z",
-  "generatedAtKst": "2026-11-25T21:34:30.329+09:00",
+  "generatedAt": "2026-11-25T12:42:39.854Z",
+  "generatedAtKst": "2026-11-25T21:42:39.854+09:00",
   "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
-  "trackerVersion": "1.0.3",
+  "trackerVersion": "1.0.4",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-25T12:34:21.917Z",
-      "updatedAtKst": "2026-11-25T21:34:21.917+09:00",
+      "updatedAt": "2026-11-25T12:42:30.736Z",
+      "updatedAtKst": "2026-11-25T21:42:30.736+09:00",
       "modelCount": 15,
       "vehicleCount": 19,
       "vehicles": [
@@ -18,42 +18,70 @@
           "model": "벤츠 AMG GT R",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SSR",
           "model": "테슬라 로드스터",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "아우디 RS6 아반트",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "캐터필러 불도저",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "포드 머스탱 GT",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "BMW M3",
           "maxStars": 5,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 1,
+          "ersBonuses": [
+            68
+          ],
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +68%"
+          ]
         },
         {
           "grade": "S",
@@ -69,7 +97,11 @@
               "stars": 2,
               "qty": 1
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
@@ -85,21 +117,33 @@
               "stars": 1,
               "qty": 1
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "현대 싼타페",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "현대 쏘나타",
           "maxStars": 4,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
@@ -115,28 +159,52 @@
               "stars": 1,
               "qty": 1
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "기아 레이 EV",
           "maxStars": 2,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "대우 다마스",
           "maxStars": 5,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 1,
+          "ersBonuses": [
+            40
+          ],
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +40%"
+          ]
         },
         {
           "grade": "R",
           "model": "대우 티코",
           "maxStars": 5,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 1,
+          "ersBonuses": [
+            31
+          ],
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +31%"
+          ]
         },
         {
           "grade": "R",
@@ -152,14 +220,18 @@
               "stars": 2,
               "qty": 1
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         }
       ]
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-25T12:34:23.506Z",
-      "updatedAtKst": "2026-11-25T21:34:23.506+09:00",
+      "updatedAt": "2026-11-25T12:42:32.507Z",
+      "updatedAtKst": "2026-11-25T21:42:32.507+09:00",
       "modelCount": 15,
       "vehicleCount": 20,
       "vehicles": [
@@ -168,35 +240,55 @@
           "model": "아우디 R8",
           "maxStars": 2,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SSR",
           "model": "페라리 458 이탈리아",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "캐터필러 불도저",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "테슬라 사이버트럭",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "토요타 수프라",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
@@ -212,49 +304,85 @@
               "stars": 1,
               "qty": 1
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "기아 스팅어",
           "maxStars": 5,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 1,
+          "ersBonuses": [
+            86
+          ],
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +86%"
+          ]
         },
         {
           "grade": "S",
           "model": "토요타 GR86",
           "maxStars": 5,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 1,
+          "ersBonuses": [
+            79
+          ],
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +79%"
+          ]
         },
         {
           "grade": "S",
           "model": "현대 싼타페",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "현대 아반떼 N",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "기아 레이 EV",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "대우 다마스",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
@@ -274,14 +402,28 @@
               "stars": 1,
               "qty": 1
             }
-          ]
+          ],
+          "star5Count": 1,
+          "ersBonuses": [
+            null
+          ],
+          "ersStatus": "not-visible",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "쉐보레 스파크",
           "maxStars": 5,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 1,
+          "ersBonuses": [
+            61
+          ],
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +61%"
+          ]
         },
         {
           "grade": "R",
@@ -297,14 +439,18 @@
               "stars": 1,
               "qty": 1
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         }
       ]
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-25T12:34:25.113Z",
-      "updatedAtKst": "2026-11-25T21:34:25.113+09:00",
+      "updatedAt": "2026-11-25T12:42:34.650Z",
+      "updatedAtKst": "2026-11-25T21:42:34.650+09:00",
       "modelCount": 15,
       "vehicleCount": 19,
       "vehicles": [
@@ -313,14 +459,22 @@
           "model": "벤츠 AMG GT R",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "벤츠 G바겐",
           "maxStars": 2,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
@@ -332,28 +486,44 @@
               "stars": 1,
               "qty": 2
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "테슬라 사이버트럭",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "현대 아이오닉 6 N",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "BMW M3",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
@@ -365,21 +535,33 @@
               "stars": 1,
               "qty": 2
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "쉐보레 콜로라도",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "제네시스 G70",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
@@ -391,7 +573,11 @@
               "stars": 1,
               "qty": 2
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
@@ -403,42 +589,66 @@
               "stars": 1,
               "qty": 2
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "현대 아이오닉 5",
           "maxStars": 2,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "대우 다마스",
           "maxStars": 2,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "현대 캐스퍼",
           "maxStars": 5,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 1,
+          "ersBonuses": [
+            67
+          ],
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +67%"
+          ]
         },
         {
           "grade": "R",
           "model": "현대 포터",
           "maxStars": 2,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         }
       ]
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-25T12:34:26.974Z",
-      "updatedAtKst": "2026-11-25T21:34:26.974+09:00",
+      "updatedAt": "2026-11-25T12:42:36.440Z",
+      "updatedAtKst": "2026-11-25T21:42:36.440+09:00",
       "modelCount": 16,
       "vehicleCount": 17,
       "vehicles": [
@@ -447,105 +657,169 @@
           "model": "페라리 458 이탈리아",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "아우디 RS6 아반트",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "테슬라 사이버트럭",
           "maxStars": 2,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "포르쉐 718",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "BMW M3",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "기아 스팅어",
           "maxStars": 5,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 1,
+          "ersBonuses": [
+            77
+          ],
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +77%"
+          ]
         },
         {
           "grade": "S",
           "model": "쉐보레 말리부",
           "maxStars": 2,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "쉐보레 콜로라도",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "제네시스 G70",
           "maxStars": 4,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "토요타 GR86",
           "maxStars": 4,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "현대 싼타페",
           "maxStars": 2,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "현대 아이오닉 5",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "기아 레이 EV",
           "maxStars": 4,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "대우 티코",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "쉐보레 스파크",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
@@ -557,14 +831,18 @@
               "stars": 1,
               "qty": 2
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         }
       ]
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-25T12:34:28.492Z",
-      "updatedAtKst": "2026-11-25T21:34:28.492+09:00",
+      "updatedAt": "2026-11-25T12:42:37.972Z",
+      "updatedAtKst": "2026-11-25T21:42:37.972+09:00",
       "modelCount": 10,
       "vehicleCount": 16,
       "vehicles": [
@@ -578,21 +856,33 @@
               "stars": 1,
               "qty": 2
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "BMW M4",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "쉐보레 말리부",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
@@ -604,7 +894,11 @@
               "stars": 1,
               "qty": 2
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
@@ -616,7 +910,11 @@
               "stars": 2,
               "qty": 2
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
@@ -632,6 +930,14 @@
               "stars": 3,
               "qty": 1
             }
+          ],
+          "star5Count": 1,
+          "ersBonuses": [
+            29
+          ],
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +29%"
           ]
         },
         {
@@ -648,21 +954,35 @@
               "stars": 1,
               "qty": 1
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "대우 티코",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "두산 굴삭기",
           "maxStars": 5,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 1,
+          "ersBonuses": [
+            null
+          ],
+          "ersStatus": "not-visible",
+          "ersEvidence": []
         },
         {
           "grade": "R",
@@ -674,14 +994,18 @@
               "stars": 1,
               "qty": 2
             }
-          ]
+          ],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         }
       ]
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-25T12:34:29.975Z",
-      "updatedAtKst": "2026-11-25T21:34:29.975+09:00",
+      "updatedAt": "2026-11-25T12:42:39.500Z",
+      "updatedAtKst": "2026-11-25T21:42:39.500+09:00",
       "modelCount": 11,
       "vehicleCount": 13,
       "vehicles": [
@@ -690,49 +1014,81 @@
           "model": "닛산 GT-R R35",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "SR",
           "model": "캐터필러 불도저",
           "maxStars": 2,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "볼보 XC40",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "토요타 GR86",
           "maxStars": 5,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 1,
+          "ersBonuses": [
+            54
+          ],
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +54%"
+          ]
         },
         {
           "grade": "S",
           "model": "현대 싼타페",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "S",
           "model": "현대 아반떼 N",
           "maxStars": 1,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "기아 레이 EV",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
@@ -748,28 +1104,54 @@
               "stars": 1,
               "qty": 2
             }
-          ]
+          ],
+          "star5Count": 1,
+          "ersBonuses": [
+            null
+          ],
+          "ersStatus": "not-visible",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "쉐보레 스파크",
           "maxStars": 5,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 1,
+          "ersBonuses": [
+            17
+          ],
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +17%"
+          ]
         },
         {
           "grade": "R",
           "model": "현대 캐스퍼",
           "maxStars": 3,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
         },
         {
           "grade": "R",
           "model": "현대 포터",
           "maxStars": 5,
           "quantity": 1,
-          "starBreakdown": []
+          "starBreakdown": [],
+          "star5Count": 1,
+          "ersBonuses": [
+            54
+          ],
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +54%"
+          ]
         }
       ]
     }
