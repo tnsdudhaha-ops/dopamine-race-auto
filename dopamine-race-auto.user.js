@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         도파민레이스 AUTO
 // @namespace    dopamine-race
-// @version      3.3.43
-// @description  Release 3.0 / 예측식 동결 / 주행기록 용량초과 대비·이중 보관 및 전송 진단
+// @version      3.3.44
+// @description  Release 4.0 기준 개발판 / 안정적인 BOOST OFF 관측 공백 복구·학습 원본 복원
 // @updateURL    https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @downloadURL  https://raw.githubusercontent.com/tnsdudhaha-ops/dopamine-race-auto/main/dopamine-race-auto.user.js
 // @match        https://luck-game-hjh.jihwan1010.chatgpt.site/*
@@ -13,7 +13,7 @@
 'use strict';
 // Avoid duplicate driving engines when the stable unified GitHub loader is active.
 if(window.__duMode&&!window.__duUnifiedLoadingAuto)return;
-const VERSION='3.3.43', RELEASE='Release 3.0', INSTANCE='__dopamineAutoActive';
+const VERSION='3.3.44', RELEASE='Release 4.0', INSTANCE='__dopamineAutoActive';
 try {window[INSTANCE]?.destroy?.();} catch(_) {}
 const DEFAULTS={brakeY:315,boostY:315,brakeOffset:0,boostOffset:0,predictionMs:0,scanX:320,scanTop:80,scanBottom:420,tolerance:8,minBandPixels:4,colorTolerance:48,matchDistance:65,boostZones:0};
 const COLORS={brakeOn:[255,205,98],brakeOff:[122,235,198],boostOn:[255,89,107],boostOff:[255,157,155]};
@@ -131,6 +131,54 @@ function tryNearBoostOffGap(track,now){
   recordDetectionAlert('near-boost-off-visible-gap-trigger',track,now,{eventKey:c.eventKey,...c.meta});
   return true;
 }
+
+// Long visual gap: extrapolate ONLY an already observed, unique, stable BOOST OFF
+// trajectory. Never fire from elapsed boost duration or event ordinal alone.
+const LONG_BOOST_GAP={minObservations:8,traceCount:7,minLongGaps:2,longGapMs:80,maxTraceGapMs:235,minSpeed:.12,maxSpeed:.36,maxSpread:.026,maxSpeedDifference:.022,nearPx:43,maxAgeMs:220,maxMissingFrames:14,maxOvershootPx:3.4};
+function longBoostMotion(track){
+  const g=LONG_BOOST_GAP;
+  if(track.type!=='boostOff'||track.triggered||track.suppressed||track.wideOnly||!track.centerObserved
+      ||track.observationCount<g.minObservations||track.lastMarkerReadSource!=='center'
+      ||!(track.speed>=g.minSpeed&&track.speed<=g.maxSpeed))return null;
+  const frames=track.traceWindow?.slice(-g.traceCount)||[];
+  if(frames.length!==g.traceCount||Math.abs(frames.at(-1).y-track.y)>.1)return null;
+  const speeds=[];let long=0;
+  for(let i=1;i<frames.length;i++){
+    const dt=frames[i].t-frames[i-1].t,dy=frames[i].y-frames[i-1].y;
+    if(!(dt>0&&dt<=g.maxTraceGapMs&&dy>0))return null;
+    if(dt>=g.longGapMs)long++;
+    speeds.push(dy/dt);
+  }
+  const ordered=speeds.slice().sort((a,b)=>a-b),median=(ordered[2]+ordered[3])/2;
+  if(long<g.minLongGaps||ordered[0]<g.minSpeed||ordered.at(-1)>g.maxSpeed
+      ||ordered.at(-1)-ordered[0]>g.maxSpread||Math.abs(track.speed-median)>g.maxSpeedDifference)return null;
+  return {median,long,spread:ordered.at(-1)-ordered[0]};
+}
+function evaluateLongBoostGap(track,now,motion=longBoostMotion(track)){
+  const g=LONG_BOOST_GAP,line=cfg.boostY-cfg.tolerance,age=now-track.lastTime;
+  if(!motion||!boostHeld||boostExpected!=='boostOff'||!(age>0&&age<=g.maxAgeMs)
+     ||track.missing>g.maxMissingFrames||!(track.firstSeenY<line-DETECTION_GUARD.lateSpawnSlackPx)
+     ||!(track.y<line&&line-track.y<=g.nearPx))return null;
+  const eventKey='boostOff:'+(eventSequence+1),prediction=predict(track),autoLead=autoLeadPreview(eventKey,track.speed);
+  const estimatedY=track.y+motion.median*age;
+  const predictedY=estimatedY+prediction.predictionPx+cfg.boostOffset+(correction[eventKey]||0)+autoLead.px;
+  const overshoot=predictedY-line;
+  if(!Number.isFinite(overshoot)||overshoot<0||overshoot>g.maxOvershootPx)return null;
+  return {eventKey,prediction,autoLead,predictedY,meta:{source:'long-gap-boost-off',gapMs:round(age,2),estimatedMarkerY:round(estimatedY,2),observedMarkerY:track.y,medianRecentSpeed:round(motion.median,5),longGaps:motion.long,speedSpread:round(motion.spread,5),predictedOvershootPx:round(overshoot,3)}};
+}
+function tryLongBoostGap(now,used){
+  if(!boostHeld||boostExpected!=='boostOff')return false;
+  const line=cfg.boostY-cfg.tolerance,g=LONG_BOOST_GAP;
+  const candidates=tracks.filter(t=>!used.has(t.id)&&!t.triggered&&!t.suppressed&&t.type==='boostOff'&&t.y<line&&line-t.y<=g.nearPx&&now-t.lastTime<=g.maxAgeMs).map(t=>({track:t,motion:longBoostMotion(t)})).filter(x=>x.motion);
+  if(candidates.length!==1)return false;
+  const {track,motion}=candidates[0];
+  if(tracks.some(t=>t!==track&&t.type==='boostOff'&&!t.triggered&&!t.suppressed&&t.y>=track.y-8&&now-t.lastTime<=g.maxAgeMs)){detectionHealth.longBoostAmbiguous++;return false;}
+  const c=evaluateLongBoostGap(track,now,motion);if(!c)return false;
+  if(!executeEvent(track,c.predictedY,c.prediction,c.eventKey,cfg.boostY,c.autoLead,c.meta))return false;
+  track.triggered=true;detectionHealth.longBoostTriggers++;
+  recordDetectionAlert('long-gap-boost-off-trigger',track,now,{eventKey:c.eventKey,...c.meta});return true;
+}
+
 const AUTO_TUNE={minSamples:3,minRuns:3,minDirectional:3,directionalFraction:.75,maxPx:2.2,frameFraction:.5,speedTolerancePxMs:.018,speedToleranceFraction:.08,directionalSpeedTolerancePxMs:.015,qualityFrames:4,qualityGapMs:55,coastMaxGapMs:51,coastMaxOvershootPx:3.55,perfectSafetyMarginPx:.5};
 const SETTINGS_PREFIX='dopamine-auto-v32:',POSITION_KEY='dopamine-auto:position-v328',LEARNING_PREFIX='dopamine-auto-v335:learning:',PROFILE_KEY='dopamine-auto-v335:profile';
 const ANALYSIS_KEY='dopamine-auto-v336:runs', MAX_RUNS=120, MAX_SAMPLES=4000;
@@ -138,7 +186,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), round=(v,n=3)=>Number((Number(v)
 let raceStartedAtMs=null,raceFinishedAtMs=null;
 let cfg={...DEFAULTS},courseId='default',courseName='기본 코스',courseScope='default',profile='',running=false,started=false,armed=false,destroyed=false,brakeHeld=false,boostHeld=false,boostExpected='boostOn',boostOnCount=0,boostOffCount=0,eventSequence=0,nextTrackId=1,tracks=[],lastFrameTime=0,averageFrameMs=16.67,raf=null,startTimer=null,feedbackObserver=null,feedbackElement=null,lastFeedbackText='',feedbackEmpty=true,lastMessage='대기 중',lastDetected='-',lastFeedback='-',runId='',profileAtStart=null,analysisLastTime=0,analysisLastSpeed=null,analysisLastSpeedTime=0,analysisMaxSpeed=null,analysisSamples=[],analysisAccel=[],analysisEvents=[],profileStatus='미확인';
 const history=[],feedbackLog=[],segmentResults=[],correction={},evidence={},detectionAlerts=[];
-const detectionHealth={lateSpawns:0,trackLongGaps:0,rafLongGaps:0,maxTrackGapMs:0,maxRafGapMs:0,coastTriggers:0,sparseBoostTriggers:0,nearBoostGapTriggers:0,sideBoostBands:0,wideBoostScans:0,wideBoostBands:0,wideBoostAmbiguous:0,wideBoostUnconfirmed:0,wideBoostTriggers:0,wheelLockSignalsDuringBoostHeld:0};
+const detectionHealth={lateSpawns:0,trackLongGaps:0,rafLongGaps:0,maxTrackGapMs:0,maxRafGapMs:0,coastTriggers:0,sparseBoostTriggers:0,nearBoostGapTriggers:0,sideBoostBands:0,wideBoostScans:0,wideBoostBands:0,wideBoostAmbiguous:0,wideBoostUnconfirmed:0,wideBoostTriggers:0,longBoostTriggers:0,longBoostAmbiguous:0,wheelLockSignalsDuringBoostHeld:0};
 const stats={perfect:0,great:0,good:0,bad:0,miss:0,unmatched:0,adjusted:0,segmentResults:0};
 const universalStats={highSpeedEvents:0,highSpeedPredictionUsed:0,accelerationUsed:0,accelerationRejected:0,accelerationSamples:0,fallbackCount:0,maximumSpeed:0,maximumAdvancePx:0,totalAdvancePx:0};
 function game(){try{return document.querySelector('iframe[title="타임어택"]')?.contentDocument||null;}catch(_){return null;}}
@@ -275,9 +323,10 @@ function saveLearning(){const key=learningKey();if(!key)return;try{localStorage.
 // Stage 1: automatic, isolated, observation-only learning. The proven predict()
 // timing and legacy manual-profile corrections are not changed by this store.
 const OBSERVE_PREFIX='dopamine-auto-v338:observe:', TRACE_PRE=12, TRACE_POST=8, TRACE_WINDOW_MS=180;
-let observeKey=null,observeState=null,observeRunCount=0,observeRunGreat=0,observePending=[],observeCommitted=false;
+let observeKey=null,observeState=null,observeRunCount=0,observeRunGreat=0,observePending=[],observeCommitted=false,observeStorageStatus='not-attempted',observeStorageError=null;
+let archiveLearningCache=[],archiveLearningStatus='loading';
 function prepareObservation(vehicle){
-  observeKey=null;observeState=null;observeRunCount=0;observeRunGreat=0;observePending=[];observeCommitted=false;
+  observeKey=null;observeState=null;observeRunCount=0;observeRunGreat=0;observePending=[];observeCommitted=false;observeStorageStatus='not-attempted';observeStorageError=null;
   if(!vehicle?.name||!vehicle?.grade||!Number.isInteger(Number(vehicle.stars))||!vehicle.tire)return;
   const identity=vehicleKey(vehicle),key=OBSERVE_PREFIX+encodeURIComponent(identity);
   let saved=null;
@@ -288,7 +337,7 @@ function prepareObservation(vehicle){
     : {schema:1,mode:'confidence-gated',identity,profile:{courseId,courseName,courseScope,vehicle:vehicle.name,grade:vehicle.grade,stars:vehicle.stars,tire:vehicle.tire},events:{},totalFeedback:0,createdAt:new Date().toISOString(),updatedAt:null};
   // Previous versions persisted partial races before the finish was confirmed.
   // Drop known interrupted run votes from auto-tuning; keep their logs for diagnostics.
-  const availableRuns=readSavedRuns();
+  const availableRuns=mergeLearningRuns(archiveLearningCache,readSavedRuns());
   const interruptedIds=new Set(availableRuns.filter(x=>x.complete===false||hasWheelLockEvidence(x)).map(x=>x.runId).filter(Boolean));
   if(interruptedIds.size)for(const entry of Object.values(observeState.events||{})){
     if(Array.isArray(entry.qualityRecent))
@@ -347,6 +396,39 @@ function safeNoRegressionAdvancePx(record){
 // This upgrades old observation-only traces after code updates without inventing
 // grades or modifying the source records. Called once on race start, never per frame.
 function hasWheelLockEvidence(run){return !!run?.wheelLockObservations?.length||/휠\s*락|wheel\s*lock/i.test(run?.wheelLockResultEvidence?.text||'');}
+
+// Replay only compact data from original completed AUTO JSON; never modify raw records.
+function compactLearningRun(r){
+  if(!r?.runId||r.runSource==='MANUAL'||String(r.version||'').startsWith('manual-'))return null;
+  return {runId:r.runId,time:r.time,complete:r.complete,vehicleKey:r.vehicleKey,version:r.version,wheelLockObservations:r.wheelLockObservations,wheelLockResultEvidence:r.wheelLockResultEvidence,history:(r.complete&&!hasWheelLockEvidence(r))?(r.history||[]).map(h=>({...h,frameTrace:{before:(h.frameTrace?.before||[]).slice(-4)}})):[]};
+}
+function mergeLearningRuns(...lists){
+  const byId=new Map();for(const list of lists)for(const r of list||[])if(r?.runId&&r.runSource!=='MANUAL'&&!String(r.version||'').startsWith('manual-'))byId.set(r.runId,r);
+  return [...byId.values()].sort((a,b)=>String(a.time||'').localeCompare(String(b.time||''))).slice(-40);
+}
+function rememberArchivedLearning(r){const c=compactLearningRun(r);if(c)archiveLearningCache=mergeLearningRuns(archiveLearningCache,[c]);}
+// Action/speed/context evidence from an independently confirmed clean prefix.
+// Observation only: do not transfer event-specific offsets to other tracks.
+function buildActionEvidence(records,complete,wheels,finishWheel){
+  const out={schema:'action-motion-v1',mode:'observation-only',complete,accepted:0,rejected:0,cutoff:null,groups:{}};
+  if(!complete){out.cutoff='incomplete';return out;}
+  const wheelTimes=(wheels||[]).map(w=>w.timeMs).filter(Number.isFinite);
+  if((wheels?.length||hasWheelLockEvidence({wheelLockResultEvidence:finishWheel}))&&!wheelTimes.length){out.cutoff='wheel-time-unknown';return out;}
+  const cutoff=wheelTimes.length?Math.min(...wheelTimes):Infinity;
+  for(const h of records||[]){
+    if(!h.feedbackGrade||h.time>=cutoff||!Number.isFinite(h.feedbackTime)||h.feedbackTime>=cutoff){out.cutoff=Number.isFinite(cutoff)?'wheel-or-ungraded-prefix':'ungraded-prefix';break;}
+    if(!validCorrectionSample(h)){out.rejected++;continue;}
+    const speedBand=Math.floor(h.speed/.025)*.025,frameBand=Math.floor(h.averageFrameMs/5)*5;
+    if(!Number.isFinite(speedBand)||!Number.isFinite(frameBand)){out.rejected++;continue;}
+    const key=[h.type,h.previousEvent||'start',round(speedBand,3),frameBand,h.triggerSource].join('|');
+    const g=out.groups[key]||(out.groups[key]={samples:0,perfect:0,great:0,good:0,bad:0,miss:0,early:0,late:0});
+    g.samples++;g[h.feedbackGrade]=(g[h.feedbackGrade]||0)+1;
+    if(h.feedbackDirection==='early'||h.feedbackDirection==='late')g[h.feedbackDirection]++;
+    out.accepted++;
+  }
+  return out;
+}
+
 function restoreRecentTireEvidence(runs){
   if(!observeState?.events||!Array.isArray(runs))return;
   const rebuilt=new Map();
@@ -376,7 +458,7 @@ function restoreRecentTireEvidence(runs){
   }
 }
 function commitCompletedObservations(){
-  if(!observeState||!observeKey||!observePending.length)return false;
+  if(!observeState||!observeKey||!observePending.length){observeStorageStatus='no-profile-or-feedback';return false;}
   for(const {record,parsed,quality} of observePending){
     const band=record.observeSpeedBand;
     const key=record.eventKey+'|'+band;
@@ -406,9 +488,9 @@ function commitCompletedObservations(){
   observeState.updatedAt=new Date().toISOString();
   try{
     localStorage.setItem(observeKey,JSON.stringify(observeState));
-    observeCommitted=true;observePending=[];
+    observeCommitted=true;observeStorageStatus='local-saved';observePending=[];
     return true;
-  }catch(_){return false;}
+  }catch(e){observeStorageStatus='local-write-failed';observeStorageError=String(e?.name||'StorageError').slice(0,64);return false;}
 }
 
 // Experimental Stage 2: conservative, inter-run, confidence-gated automatic offset.
@@ -731,12 +813,18 @@ const runArchive={
       const get=store.get(id);get.onsuccess=()=>resolve(get.result||null);get.onerror=()=>reject(get.error||Error('Archive read failed'));
     };
   });},
+  async recentLearning(){const db=await openRunArchive();return new Promise((resolve,reject)=>{
+    const req=db.transaction(RUN_ARCHIVE_STORE,'readonly').objectStore(RUN_ARCHIVE_STORE).openCursor(null,'prev'),found=[];let scanned=0;
+    req.onerror=()=>reject(req.error||Error('Learning archive read failed'));
+    req.onsuccess=()=>{const cursor=req.result;if(!cursor||found.length>=40||scanned>=200){resolve(found);return;}scanned++;const r=compactLearningRun(cursor.value);if(r)found.push(r);cursor.continue();};
+  });},
   async all(){const db=await openRunArchive();return new Promise((resolve,reject)=>{
     const req=db.transaction(RUN_ARCHIVE_STORE,'readonly').objectStore(RUN_ARCHIVE_STORE).getAll();
     req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error||Error('Archive export failed'));
   });}
 };
 window.__duRunArchive=runArchive;
+runArchive.recentLearning().then(r=>{archiveLearningCache=mergeLearningRuns(archiveLearningCache,r);archiveLearningStatus='ready';}).catch(e=>{archiveLearningStatus='read-failed:'+String(e?.name||'Error').slice(0,40);});
 let lastRunPersistence={status:'none',runId:null,error:null};
 function readSavedRuns(){try{const a=JSON.parse(localStorage.getItem(ANALYSIS_KEY)||'[]');return Array.isArray(a)?a:[];}catch(_){return [];}}
 function saveRun(reason){
@@ -776,9 +864,10 @@ function saveRun(reason){
   };
   const wheelTrainingBlocked=wheelLockObservations.length>0||hasWheelLockEvidence({wheelLockResultEvidence:wheelLockAtFinish});
    const observationCommitted=complete&&allEvents&&!wheelTrainingBlocked?commitCompletedObservations():false;
-  const result={runId,version:VERSION,courseId,courseName,courseScope,vehicle:profileAtStart,vehicleKey:vehicleKey(profileAtStart),manualProfile:profile||null,
-    observationLearning:{mode:'tire-speed-exact-event-confidence-gated',committed:observationCommitted,excludedReason:observationCommitted?null:!complete?'incomplete':!allEvents?'ungraded-events':wheelTrainingBlocked?'wheel-lock-sequence-unreliable':'no-eligible-observation-or-storage-failed',profileKey:observeState?.identity||null,runFeedback:observeRunCount,runGreat:observeRunGreat,eligibleFeedback:history.filter(x=>x.autoLearningEligible).length,totalProfileFeedback:observeState?.totalFeedback||0,autoCorrectionAppliedEvents:history.filter(x=>x.autoCorrectionPx!==0).length,minSamples:AUTO_TUNE.minSamples},traceCapture:{beforeFrames:TRACE_PRE,afterFrames:TRACE_POST,windowMs:TRACE_WINDOW_MS},
-    reason,complete,observedRaceDurationMs,observedRaceDurationSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),raceDurationSource:observedRaceDurationMs===null?null:'client-start-light-to-first-finish-phase',gameTiming,wheelLockResultEvidence:complete?wheelLockAtFinish:null,wheelLockObservations:wheelLockObservations.slice(),crossTrackFeedback:summarizeCrossTrackFeedback(),completionEvidence:{allEvents,allSegments,phase:root()?.dataset.phase||null},detectionHealth:{...detectionHealth},detectionAlerts:detectionAlerts.slice(),shortGapCoast:{enabled:true,guard:{...COAST_GUARD},triggeredCount:detectionHealth.coastTriggers},sparseBoostCoast:{enabled:true,guard:{...SPARSE_BOOST_GUARD},triggeredCount:detectionHealth.sparseBoostTriggers},nearBoostOffGap:{enabled:true,guard:{...NEAR_BOOST_GAP_GUARD},triggeredCount:detectionHealth.nearBoostGapTriggers},sideBoostScan:{enabled:true,guard:{...SIDE_BOOST_SCAN},bands:detectionHealth.sideBoostBands},wideBoostScan:{enabled:true,guard:{...WIDE_BOOST_SCAN},scans:detectionHealth.wideBoostScans,bands:detectionHealth.wideBoostBands,ambiguous:detectionHealth.wideBoostAmbiguous,triggers:detectionHealth.wideBoostTriggers},ungradedEventKeys:history.filter(x=>x.feedbackGrade===null).map(x=>x.eventKey),time:new Date().toISOString(),
+  const result={runId,version:VERSION,releaseBase:RELEASE,courseId,courseName,courseScope,vehicle:profileAtStart,vehicleKey:vehicleKey(profileAtStart),manualProfile:profile||null,
+    actionLearning:buildActionEvidence(history,complete,wheelLockObservations,wheelLockAtFinish),
+    observationLearning:{mode:'tire-speed-exact-event-confidence-gated',storageStatus:observeStorageStatus,storageErrorName:observeStorageError,archiveLearningStatus,archiveLearningRecords:archiveLearningCache.length,committed:observationCommitted,excludedReason:observationCommitted?null:!complete?'incomplete':!allEvents?'ungraded-events':wheelTrainingBlocked?'wheel-lock-sequence-unreliable':'no-eligible-observation-or-storage-failed',profileKey:observeState?.identity||null,runFeedback:observeRunCount,runGreat:observeRunGreat,eligibleFeedback:history.filter(x=>x.autoLearningEligible).length,totalProfileFeedback:observeState?.totalFeedback||0,autoCorrectionAppliedEvents:history.filter(x=>x.autoCorrectionPx!==0).length,minSamples:AUTO_TUNE.minSamples},traceCapture:{beforeFrames:TRACE_PRE,afterFrames:TRACE_POST,windowMs:TRACE_WINDOW_MS},
+    reason,complete,observedRaceDurationMs,observedRaceDurationSec:observedRaceDurationMs===null?null:round(observedRaceDurationMs/1000,3),raceDurationSource:observedRaceDurationMs===null?null:'client-start-light-to-first-finish-phase',gameTiming,wheelLockResultEvidence:complete?wheelLockAtFinish:null,wheelLockObservations:wheelLockObservations.slice(),crossTrackFeedback:summarizeCrossTrackFeedback(),completionEvidence:{allEvents,allSegments,phase:root()?.dataset.phase||null},detectionHealth:{...detectionHealth},detectionAlerts:detectionAlerts.slice(),shortGapCoast:{enabled:true,guard:{...COAST_GUARD},triggeredCount:detectionHealth.coastTriggers},sparseBoostCoast:{enabled:true,guard:{...SPARSE_BOOST_GUARD},triggeredCount:detectionHealth.sparseBoostTriggers},nearBoostOffGap:{enabled:true,guard:{...NEAR_BOOST_GAP_GUARD},triggeredCount:detectionHealth.nearBoostGapTriggers},longBoostGap:{enabled:true,guard:{...LONG_BOOST_GAP},triggers:detectionHealth.longBoostTriggers,ambiguous:detectionHealth.longBoostAmbiguous},sideBoostScan:{enabled:true,guard:{...SIDE_BOOST_SCAN},bands:detectionHealth.sideBoostBands},wideBoostScan:{enabled:true,guard:{...WIDE_BOOST_SCAN},scans:detectionHealth.wideBoostScans,bands:detectionHealth.wideBoostBands,ambiguous:detectionHealth.wideBoostAmbiguous,triggers:detectionHealth.wideBoostTriggers},ungradedEventKeys:history.filter(x=>x.feedbackGrade===null).map(x=>x.eventKey),time:new Date().toISOString(),
     // Keep the canonical instant in UTC and add its KST ISO-8601 representation.
     // Using the UTC instant (rather than the device's local clock formatting) avoids a second +9h shift.
     timeKst:null,timeZone:'Asia/Seoul',
@@ -797,6 +886,7 @@ function saveRun(reason){
   // synchronous legacy localStorage save cannot fit another large telemetry JSON.
   let archiveWrite;
   try{archiveWrite=runArchive.put(result);}catch(e){archiveWrite=Promise.reject(e);}
+  archiveWrite.then(()=>rememberArchivedLearning(result)).catch(()=>{});
   let localSaved=false,localError=null;
   try{
     // If legacy JSON became unreadable, never overwrite its raw bytes with an empty list.
@@ -1008,7 +1098,8 @@ function updateTracks(bands,now){
     if(!track.wideOnly&&!tryShortGapCoast(track,now)&&!tryNearBoostOffGap(track,now))trySparseBoostCoast(track,now);
     track.missing++;
   }
-  tracks=tracks.filter(track=>track.missing<=12);
+  tryLongBoostGap(now,used);
+  tracks=tracks.filter(track=>track.missing<=12||(boostHeld&&track.missing<=LONG_BOOST_GAP.maxMissingFrames&&now-track.lastTime<=LONG_BOOST_GAP.maxAgeMs&&!!longBoostMotion(track)));
   render();
 }
 function parseFeedback(text){const raw=String(text||'').trim();if(!raw)return null;if(/^진입\s+/i.test(raw)&&/\s*\/\s*탈출\s+/i.test(raw)){const m=raw.match(/^진입\s+(PERFECT|GREAT|GOOD|BAD|MISS)(?:\s*·\s*(빠름|늦음)\s*([\d.]+)\s*m)?\s*\/\s*탈출\s+(PERFECT|GREAT|GOOD|BAD|MISS)(?:\s*·\s*(빠름|늦음)\s*([\d.]+)\s*m)?(?:\s*·\s*(\d+)\s*km\/h)?/i);return {kind:'segment',raw,entry:m?.[1]?.toLowerCase()||null,exit:m?.[4]?.toLowerCase()||null,entryDirection:m?.[2]||null,entryDistanceM:m?.[3]?Number(m[3]):null,exitDirection:m?.[5]||null,exitDistanceM:m?.[6]?Number(m[6]):null,speedKmh:m?.[7]?Number(m[7]):null};}let eventType=null;if(/브레이크\s*진입/.test(raw))eventType='brakeOn';else if(/브레이크\s*해제/.test(raw))eventType='brakeOff';else if(/부스터\s*ON|BOOST\s*ON/i.test(raw))eventType='boostOn';else if(/부스터\s*OFF|BOOST\s*OFF/i.test(raw))eventType='boostOff';if(!eventType)return null;const gr=raw.match(/PERFECT|GREAT|GOOD|BAD|MISS|퍼펙트|그레이트|굿|배드|미스/i)?.[0]?.toLowerCase(),grades={퍼펙트:'perfect',그레이트:'great',굿:'good',배드:'bad',미스:'miss'},grade=grades[gr]||gr;if(!grade)return null;const direction=/빠름|EARLY/i.test(raw)?'early':/늦음|LATE/i.test(raw)?'late':null,dist=raw.match(/(?:빠름|늦음|EARLY|LATE)\s*([\d.]+)\s*m/i);return {kind:'event',raw,eventType,grade,direction,distanceM:dist?Number(dist[1]):null};}
