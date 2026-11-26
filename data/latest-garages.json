@@ -1,15 +1,15 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-26T01:18:15.967Z",
-  "generatedAtKst": "2026-11-26T10:18:15.967+09:00",
+  "generatedAt": "2026-11-26T01:24:14.325Z",
+  "generatedAtKst": "2026-11-26T10:24:14.325+09:00",
   "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0.4",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-26T01:18:07.436Z",
-      "updatedAtKst": "2026-11-26T10:18:07.436+09:00",
+      "updatedAt": "2026-11-26T01:24:06.498Z",
+      "updatedAtKst": "2026-11-26T10:24:06.498+09:00",
       "modelCount": 15,
       "vehicleCount": 20,
       "vehicles": [
@@ -85,6 +85,17 @@
         },
         {
           "grade": "S",
+          "model": "볼보 XC40",
+          "maxStars": 3,
+          "quantity": 1,
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
+        },
+        {
+          "grade": "S",
           "model": "쉐보레 말리부",
           "maxStars": 3,
           "quantity": 2,
@@ -118,17 +129,6 @@
               "qty": 1
             }
           ],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "S",
-          "model": "현대 싼타페",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": [],
           "star5Count": 0,
           "ersBonuses": [],
           "ersStatus": "not-applicable",
@@ -230,8 +230,8 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-26T01:18:09.205Z",
-      "updatedAtKst": "2026-11-26T10:18:09.205+09:00",
+      "updatedAt": "2026-11-26T01:24:07.906Z",
+      "updatedAtKst": "2026-11-26T10:24:07.906+09:00",
       "modelCount": 15,
       "vehicleCount": 20,
       "vehicles": [
@@ -449,8 +449,8 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-26T01:18:10.894Z",
-      "updatedAtKst": "2026-11-26T10:18:10.894+09:00",
+      "updatedAt": "2026-11-26T01:24:09.363Z",
+      "updatedAtKst": "2026-11-26T10:24:09.363+09:00",
       "modelCount": 15,
       "vehicleCount": 19,
       "vehicles": [
@@ -647,8 +647,8 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-26T01:18:12.757Z",
-      "updatedAtKst": "2026-11-26T10:18:12.757+09:00",
+      "updatedAt": "2026-11-26T01:24:11.052Z",
+      "updatedAtKst": "2026-11-26T10:24:11.052+09:00",
       "modelCount": 16,
       "vehicleCount": 17,
       "vehicles": [
@@ -841,8 +841,8 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-26T01:18:14.207Z",
-      "updatedAtKst": "2026-11-26T10:18:14.207+09:00",
+      "updatedAt": "2026-11-26T01:24:12.520Z",
+      "updatedAtKst": "2026-11-26T10:24:12.520+09:00",
       "modelCount": 9,
       "vehicleCount": 14,
       "vehicles": [
@@ -988,8 +988,8 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-26T01:18:15.607Z",
-      "updatedAtKst": "2026-11-26T10:18:15.607+09:00",
+      "updatedAt": "2026-11-26T01:24:13.944Z",
+      "updatedAtKst": "2026-11-26T10:24:13.944+09:00",
       "modelCount": 9,
       "vehicleCount": 11,
       "vehicles": [
