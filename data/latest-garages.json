@@ -1,17 +1,17 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-25T12:42:39.854Z",
-  "generatedAtKst": "2026-11-25T21:42:39.854+09:00",
+  "generatedAt": "2026-11-26T01:18:15.967Z",
+  "generatedAtKst": "2026-11-26T10:18:15.967+09:00",
   "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0.4",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-25T12:42:30.736Z",
-      "updatedAtKst": "2026-11-25T21:42:30.736+09:00",
+      "updatedAt": "2026-11-26T01:18:07.436Z",
+      "updatedAtKst": "2026-11-26T10:18:07.436+09:00",
       "modelCount": 15,
-      "vehicleCount": 19,
+      "vehicleCount": 20,
       "vehicles": [
         {
           "grade": "SSR",
@@ -149,7 +149,7 @@
           "grade": "S",
           "model": "현대 아이오닉 5",
           "maxStars": 2,
-          "quantity": 2,
+          "quantity": 3,
           "starBreakdown": [
             {
               "stars": 2,
@@ -157,7 +157,7 @@
             },
             {
               "stars": 1,
-              "qty": 1
+              "qty": 2
             }
           ],
           "star5Count": 0,
@@ -230,8 +230,8 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-25T12:42:32.507Z",
-      "updatedAtKst": "2026-11-25T21:42:32.507+09:00",
+      "updatedAt": "2026-11-26T01:18:09.205Z",
+      "updatedAtKst": "2026-11-26T10:18:09.205+09:00",
       "modelCount": 15,
       "vehicleCount": 20,
       "vehicles": [
@@ -449,8 +449,8 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-25T12:42:34.650Z",
-      "updatedAtKst": "2026-11-25T21:42:34.650+09:00",
+      "updatedAt": "2026-11-26T01:18:10.894Z",
+      "updatedAtKst": "2026-11-26T10:18:10.894+09:00",
       "modelCount": 15,
       "vehicleCount": 19,
       "vehicles": [
@@ -518,6 +518,17 @@
           "grade": "SR",
           "model": "BMW M3",
           "maxStars": 1,
+          "quantity": 1,
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
+        },
+        {
+          "grade": "S",
+          "model": "기아 스팅어",
+          "maxStars": 2,
           "quantity": 1,
           "starBreakdown": [],
           "star5Count": 0,
@@ -608,17 +619,6 @@
         },
         {
           "grade": "R",
-          "model": "대우 다마스",
-          "maxStars": 2,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "R",
           "model": "현대 캐스퍼",
           "maxStars": 5,
           "quantity": 1,
@@ -647,8 +647,8 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-25T12:42:36.440Z",
-      "updatedAtKst": "2026-11-25T21:42:36.440+09:00",
+      "updatedAt": "2026-11-26T01:18:12.757Z",
+      "updatedAtKst": "2026-11-26T10:18:12.757+09:00",
       "modelCount": 16,
       "vehicleCount": 17,
       "vehicles": [
@@ -841,22 +841,17 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-25T12:42:37.972Z",
-      "updatedAtKst": "2026-11-25T21:42:37.972+09:00",
-      "modelCount": 10,
-      "vehicleCount": 16,
+      "updatedAt": "2026-11-26T01:18:14.207Z",
+      "updatedAtKst": "2026-11-26T10:18:14.207+09:00",
+      "modelCount": 9,
+      "vehicleCount": 14,
       "vehicles": [
         {
           "grade": "SSR",
           "model": "포르쉐 911",
-          "maxStars": 1,
-          "quantity": 2,
-          "starBreakdown": [
-            {
-              "stars": 1,
-              "qty": 2
-            }
-          ],
+          "maxStars": 2,
+          "quantity": 1,
+          "starBreakdown": [],
           "star5Count": 0,
           "ersBonuses": [],
           "ersStatus": "not-applicable",
@@ -866,17 +861,6 @@
           "grade": "SR",
           "model": "BMW M4",
           "maxStars": 3,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "S",
-          "model": "쉐보레 말리부",
-          "maxStars": 1,
           "quantity": 1,
           "starBreakdown": [],
           "star5Count": 0,
@@ -1004,10 +988,10 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-25T12:42:39.500Z",
-      "updatedAtKst": "2026-11-25T21:42:39.500+09:00",
-      "modelCount": 11,
-      "vehicleCount": 13,
+      "updatedAt": "2026-11-26T01:18:15.607Z",
+      "updatedAtKst": "2026-11-26T10:18:15.607+09:00",
+      "modelCount": 9,
+      "vehicleCount": 11,
       "vehicles": [
         {
           "grade": "SSR",
@@ -1056,28 +1040,6 @@
           "ersEvidence": [
             "ERS +54%"
           ]
-        },
-        {
-          "grade": "S",
-          "model": "현대 싼타페",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "S",
-          "model": "현대 아반떼 N",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
         },
         {
           "grade": "R",
