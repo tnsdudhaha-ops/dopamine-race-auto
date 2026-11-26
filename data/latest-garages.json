@@ -1,33 +1,22 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-26T06:29:47.736Z",
-  "generatedAtKst": "2026-11-26T15:29:47.736+09:00",
+  "generatedAt": "2026-11-26T07:34:43.734Z",
+  "generatedAtKst": "2026-11-26T16:34:43.734+09:00",
   "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0.4",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-26T06:29:39.702Z",
-      "updatedAtKst": "2026-11-26T15:29:39.702+09:00",
-      "modelCount": 15,
-      "vehicleCount": 20,
+      "updatedAt": "2026-11-26T07:34:35.932Z",
+      "updatedAtKst": "2026-11-26T16:34:35.932+09:00",
+      "modelCount": 14,
+      "vehicleCount": 16,
       "vehicles": [
         {
           "grade": "SSR",
           "model": "벤츠 AMG GT R",
-          "maxStars": 3,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "SSR",
-          "model": "테슬라 로드스터",
-          "maxStars": 1,
+          "maxStars": 4,
           "quantity": 1,
           "starBreakdown": [],
           "star5Count": 0,
@@ -118,17 +107,8 @@
           "grade": "S",
           "model": "토요타 GR86",
           "maxStars": 2,
-          "quantity": 2,
-          "starBreakdown": [
-            {
-              "stars": 2,
-              "qty": 1
-            },
-            {
-              "stars": 1,
-              "qty": 1
-            }
-          ],
+          "quantity": 1,
+          "starBreakdown": [],
           "star5Count": 0,
           "ersBonuses": [],
           "ersStatus": "not-applicable",
@@ -148,18 +128,9 @@
         {
           "grade": "S",
           "model": "현대 아이오닉 5",
-          "maxStars": 2,
-          "quantity": 3,
-          "starBreakdown": [
-            {
-              "stars": 2,
-              "qty": 1
-            },
-            {
-              "stars": 1,
-              "qty": 2
-            }
-          ],
+          "maxStars": 4,
+          "quantity": 1,
+          "starBreakdown": [],
           "star5Count": 0,
           "ersBonuses": [],
           "ersStatus": "not-applicable",
@@ -230,10 +201,10 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-26T06:29:41.396Z",
-      "updatedAtKst": "2026-11-26T15:29:41.396+09:00",
-      "modelCount": 16,
-      "vehicleCount": 20,
+      "updatedAt": "2026-11-26T07:34:37.619Z",
+      "updatedAtKst": "2026-11-26T16:34:37.619+09:00",
+      "modelCount": 14,
+      "vehicleCount": 18,
       "vehicles": [
         {
           "grade": "SSR",
@@ -384,17 +355,6 @@
         },
         {
           "grade": "R",
-          "model": "대우 다마스",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "R",
           "model": "두산 굴삭기",
           "maxStars": 5,
           "quantity": 2,
@@ -432,17 +392,6 @@
         },
         {
           "grade": "R",
-          "model": "현대 캐스퍼",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "R",
           "model": "현대 포터",
           "maxStars": 1,
           "quantity": 1,
@@ -456,14 +405,14 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-26T06:29:43.038Z",
-      "updatedAtKst": "2026-11-26T15:29:43.038+09:00",
+      "updatedAt": "2026-11-26T07:34:39.033Z",
+      "updatedAtKst": "2026-11-26T16:34:39.033+09:00",
       "modelCount": 15,
       "vehicleCount": 19,
       "vehicles": [
         {
           "grade": "SSR",
-          "model": "벤츠 AMG GT R",
+          "model": "테슬라 로드스터",
           "maxStars": 1,
           "quantity": 1,
           "starBreakdown": [],
@@ -654,10 +603,10 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-26T06:29:44.703Z",
-      "updatedAtKst": "2026-11-26T15:29:44.703+09:00",
-      "modelCount": 15,
-      "vehicleCount": 15,
+      "updatedAt": "2026-11-26T07:34:40.637Z",
+      "updatedAtKst": "2026-11-26T16:34:40.637+09:00",
+      "modelCount": 14,
+      "vehicleCount": 14,
       "vehicles": [
         {
           "grade": "SSR",
@@ -765,29 +714,22 @@
         {
           "grade": "S",
           "model": "토요타 GR86",
-          "maxStars": 4,
+          "maxStars": 5,
           "quantity": 1,
           "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
+          "star5Count": 1,
+          "ersBonuses": [
+            55
+          ],
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +55%"
+          ]
         },
         {
           "grade": "S",
           "model": "현대 싼타페",
           "maxStars": 2,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "S",
-          "model": "현대 아이오닉 5",
-          "maxStars": 1,
           "quantity": 1,
           "starBreakdown": [],
           "star5Count": 0,
@@ -832,10 +774,10 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-26T06:29:46.059Z",
-      "updatedAtKst": "2026-11-26T15:29:46.059+09:00",
+      "updatedAt": "2026-11-26T07:34:42.043Z",
+      "updatedAtKst": "2026-11-26T16:34:42.043+09:00",
       "modelCount": 9,
-      "vehicleCount": 12,
+      "vehicleCount": 13,
       "vehicles": [
         {
           "grade": "SSR",
@@ -913,7 +855,7 @@
           "grade": "R",
           "model": "대우 다마스",
           "maxStars": 2,
-          "quantity": 2,
+          "quantity": 3,
           "starBreakdown": [
             {
               "stars": 2,
@@ -921,7 +863,7 @@
             },
             {
               "stars": 1,
-              "qty": 1
+              "qty": 2
             }
           ],
           "star5Count": 0,
@@ -973,10 +915,10 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-26T06:29:47.382Z",
-      "updatedAtKst": "2026-11-26T15:29:47.382+09:00",
+      "updatedAt": "2026-11-26T07:34:43.380Z",
+      "updatedAtKst": "2026-11-26T16:34:43.380+09:00",
       "modelCount": 9,
-      "vehicleCount": 12,
+      "vehicleCount": 11,
       "vehicles": [
         {
           "grade": "SSR",
@@ -1081,22 +1023,17 @@
         {
           "grade": "R",
           "model": "현대 캐스퍼",
-          "maxStars": 3,
-          "quantity": 2,
-          "starBreakdown": [
-            {
-              "stars": 3,
-              "qty": 1
-            },
-            {
-              "stars": 2,
-              "qty": 1
-            }
+          "maxStars": 5,
+          "quantity": 1,
+          "starBreakdown": [],
+          "star5Count": 1,
+          "ersBonuses": [
+            91
           ],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
+          "ersStatus": "collected",
+          "ersEvidence": [
+            "ERS +91%"
+          ]
         },
         {
           "grade": "R",
