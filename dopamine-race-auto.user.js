@@ -496,6 +496,8 @@ function commitCompletedObservations(){
 // Experimental Stage 2: conservative, inter-run, confidence-gated automatic offset.
 function autoLeadPreview(eventKey,speed){
   const empty={px:0,samples:0,runs:0,reason:'insufficient-or-manual'};
+  // A confirmed wheel lock can shift the sequence: do not reuse ordinal offsets afterward.
+  if(wheelLockObservations.length)return {...empty,reason:'wheel-lock-sequence-unreliable'};
   if(!observeState||profile||(correction[eventKey]||0)!==0||!(Number.isFinite(speed)&&speed>0))return empty;
   // vehicleKey -> exact track/car/grade/star/tire. NEVER transfer offsets from
   // one tire to another, and never assume that a tire has a fixed speed multiplier.
