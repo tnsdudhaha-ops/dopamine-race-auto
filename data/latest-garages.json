@@ -1,15 +1,15 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-26T04:09:54.441Z",
-  "generatedAtKst": "2026-11-26T13:09:54.441+09:00",
+  "generatedAt": "2026-11-26T04:12:20.125Z",
+  "generatedAtKst": "2026-11-26T13:12:20.125+09:00",
   "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0.4",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-26T04:09:46.496Z",
-      "updatedAtKst": "2026-11-26T13:09:46.496+09:00",
+      "updatedAt": "2026-11-26T04:12:11.263Z",
+      "updatedAtKst": "2026-11-26T13:12:11.263+09:00",
       "modelCount": 15,
       "vehicleCount": 20,
       "vehicles": [
@@ -230,8 +230,8 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-26T04:09:48.020Z",
-      "updatedAtKst": "2026-11-26T13:09:48.020+09:00",
+      "updatedAt": "2026-11-26T04:12:13.153Z",
+      "updatedAtKst": "2026-11-26T13:12:13.153+09:00",
       "modelCount": 16,
       "vehicleCount": 20,
       "vehicles": [
@@ -456,8 +456,8 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-26T04:09:49.522Z",
-      "updatedAtKst": "2026-11-26T13:09:49.522+09:00",
+      "updatedAt": "2026-11-26T04:12:14.748Z",
+      "updatedAtKst": "2026-11-26T13:12:14.748+09:00",
       "modelCount": 15,
       "vehicleCount": 19,
       "vehicles": [
@@ -654,8 +654,8 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-26T04:09:51.126Z",
-      "updatedAtKst": "2026-11-26T13:09:51.126+09:00",
+      "updatedAt": "2026-11-26T04:12:16.657Z",
+      "updatedAtKst": "2026-11-26T13:12:16.657+09:00",
       "modelCount": 16,
       "vehicleCount": 17,
       "vehicles": [
@@ -848,8 +848,8 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-26T04:09:52.691Z",
-      "updatedAtKst": "2026-11-26T13:09:52.691+09:00",
+      "updatedAt": "2026-11-26T04:12:18.236Z",
+      "updatedAtKst": "2026-11-26T13:12:18.236+09:00",
       "modelCount": 9,
       "vehicleCount": 12,
       "vehicles": [
@@ -989,8 +989,8 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-26T04:09:54.086Z",
-      "updatedAtKst": "2026-11-26T13:09:54.086+09:00",
+      "updatedAt": "2026-11-26T04:12:19.769Z",
+      "updatedAtKst": "2026-11-26T13:12:19.769+09:00",
       "modelCount": 9,
       "vehicleCount": 12,
       "vehicles": [
