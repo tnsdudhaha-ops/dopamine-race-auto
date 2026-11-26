@@ -1,15 +1,15 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-26T04:12:20.125Z",
-  "generatedAtKst": "2026-11-26T13:12:20.125+09:00",
+  "generatedAt": "2026-11-26T06:29:47.736Z",
+  "generatedAtKst": "2026-11-26T15:29:47.736+09:00",
   "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0.4",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-26T04:12:11.263Z",
-      "updatedAtKst": "2026-11-26T13:12:11.263+09:00",
+      "updatedAt": "2026-11-26T06:29:39.702Z",
+      "updatedAtKst": "2026-11-26T15:29:39.702+09:00",
       "modelCount": 15,
       "vehicleCount": 20,
       "vehicles": [
@@ -230,8 +230,8 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-26T04:12:13.153Z",
-      "updatedAtKst": "2026-11-26T13:12:13.153+09:00",
+      "updatedAt": "2026-11-26T06:29:41.396Z",
+      "updatedAtKst": "2026-11-26T15:29:41.396+09:00",
       "modelCount": 16,
       "vehicleCount": 20,
       "vehicles": [
@@ -456,8 +456,8 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-26T04:12:14.748Z",
-      "updatedAtKst": "2026-11-26T13:12:14.748+09:00",
+      "updatedAt": "2026-11-26T06:29:43.038Z",
+      "updatedAtKst": "2026-11-26T15:29:43.038+09:00",
       "modelCount": 15,
       "vehicleCount": 19,
       "vehicles": [
@@ -654,10 +654,10 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-26T04:12:16.657Z",
-      "updatedAtKst": "2026-11-26T13:12:16.657+09:00",
-      "modelCount": 16,
-      "vehicleCount": 17,
+      "updatedAt": "2026-11-26T06:29:44.703Z",
+      "updatedAtKst": "2026-11-26T15:29:44.703+09:00",
+      "modelCount": 15,
+      "vehicleCount": 15,
       "vehicles": [
         {
           "grade": "SSR",
@@ -819,26 +819,10 @@
         },
         {
           "grade": "R",
-          "model": "쉐보레 스파크",
+          "model": "현대 포터",
           "maxStars": 1,
           "quantity": 1,
           "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "R",
-          "model": "현대 포터",
-          "maxStars": 1,
-          "quantity": 2,
-          "starBreakdown": [
-            {
-              "stars": 1,
-              "qty": 2
-            }
-          ],
           "star5Count": 0,
           "ersBonuses": [],
           "ersStatus": "not-applicable",
@@ -848,8 +832,8 @@
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-26T04:12:18.236Z",
-      "updatedAtKst": "2026-11-26T13:12:18.236+09:00",
+      "updatedAt": "2026-11-26T06:29:46.059Z",
+      "updatedAtKst": "2026-11-26T15:29:46.059+09:00",
       "modelCount": 9,
       "vehicleCount": 12,
       "vehicles": [
@@ -989,8 +973,8 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-26T04:12:19.769Z",
-      "updatedAtKst": "2026-11-26T13:12:19.769+09:00",
+      "updatedAt": "2026-11-26T06:29:47.382Z",
+      "updatedAtKst": "2026-11-26T15:29:47.382+09:00",
       "modelCount": 9,
       "vehicleCount": 12,
       "vehicles": [
