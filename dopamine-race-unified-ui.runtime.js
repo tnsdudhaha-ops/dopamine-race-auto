@@ -1,17 +1,20 @@
 // Dopamine Unified UI runtime — loaded from pinned GitHub commit by the stable bootstrap.
 // This file is not a userscript. The bootstrap provides page window and GM upload functions.
-// UI layout: compact-20261122. Manual recorder v0.1.6 and AUTO timing/prediction unchanged.
+// UI layout: garage-only-v1.0.0 (2026-11-27). Presentation only; all existing controls and handlers preserved. Manual recorder v0.1.6 unchanged.
 (function () {
 'use strict';
 if(window.__dopamineUnifiedControl?.active)return;
 const autoRoot=document.getElementById('dopamine-auto-v336-ui');
 if(autoRoot)autoRoot.style.setProperty('display','none','important');
-const box=document.createElement('div');box.id='du-integrated';box.dataset.uiLayout='compact-20261122';
+const box=document.createElement('div');box.id='du-integrated';box.dataset.uiLayout='garage-only-v1.0.0';
 box.innerHTML='<style>'+
 '#du-integrated *{box-sizing:border-box}#du-integrated{font:11px/1.38 system-ui,sans-serif;color:#e9f3ff}'+
 '#du-integrated .panel{width:208px;max-width:calc(100vw - 16px);background:#152337;border:1px solid #667b91;border-radius:10px;padding:7px;box-shadow:0 5px 19px #0009;max-height:calc(100vh - 16px);overflow-y:auto;overscroll-behavior:contain}'+
 '#du-integrated button{border:0;border-radius:5px;color:white;background:#38536e;padding:7px 3px;min-height:32px;font:700 10px/1.3 system-ui,sans-serif;cursor:pointer}'+
 '#du-integrated button:disabled{opacity:.48;cursor:not-allowed}'+
+// Keep the existing control DOM and event handlers, but expose only garage refresh.
+'#du-integrated button:not(#du-garage){display:none!important}'+
+'#du-integrated .race-buttons{grid-template-columns:1fr}'+
 '#du-integrated .head{display:flex;align-items:center;justify-content:space-between;gap:4px;touch-action:none;margin-bottom:5px;cursor:move}'+
 '#du-integrated .head strong{font-size:12px;white-space:nowrap}#du-integrated .head-actions{display:flex;align-items:center;gap:3px}'+
 '#du-integrated .head-actions button{padding:3px 5px;min-height:26px;white-space:nowrap;font-size:10px}'+
