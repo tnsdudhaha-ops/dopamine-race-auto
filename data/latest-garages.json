@@ -1,17 +1,17 @@
 {
   "schema": "dopamine-race-garages-ai-v1",
-  "generatedAt": "2026-11-27T05:38:32.650Z",
-  "generatedAtKst": "2026-11-27T14:38:32.650+09:00",
+  "generatedAt": "2026-11-27T08:52:01.286Z",
+  "generatedAtKst": "2026-11-27T17:52:01.286+09:00",
   "timeZone": "Asia/Seoul",
   "source": "도파민레이스 차량 추적기",
   "trackerVersion": "1.0.4",
   "participants": [
     {
       "user": "ㅇ발",
-      "updatedAt": "2026-11-27T05:38:24.775Z",
-      "updatedAtKst": "2026-11-27T14:38:24.775+09:00",
+      "updatedAt": "2026-11-27T08:51:52.904Z",
+      "updatedAtKst": "2026-11-27T17:51:52.904+09:00",
       "modelCount": 13,
-      "vehicleCount": 16,
+      "vehicleCount": 17,
       "vehicles": [
         {
           "grade": "SSR",
@@ -25,8 +25,8 @@
           "ersEvidence": []
         },
         {
-          "grade": "SR",
-          "model": "아우디 RS6 아반트",
+          "grade": "SSR",
+          "model": "제네시스 마그마 GT",
           "maxStars": 1,
           "quantity": 1,
           "starBreakdown": [],
@@ -129,11 +129,15 @@
           "grade": "R",
           "model": "기아 레이 EV",
           "maxStars": 2,
-          "quantity": 2,
+          "quantity": 3,
           "starBreakdown": [
             {
               "stars": 2,
               "qty": 2
+            },
+            {
+              "stars": 1,
+              "qty": 1
             }
           ],
           "star5Count": 0,
@@ -158,10 +162,19 @@
         },
         {
           "grade": "R",
-          "model": "대우 티코",
+          "model": "티코 ×1대",
           "maxStars": 5,
-          "quantity": 1,
-          "starBreakdown": [],
+          "quantity": 2,
+          "starBreakdown": [
+            {
+              "stars": 5,
+              "qty": 1
+            },
+            {
+              "stars": 1,
+              "qty": 1
+            }
+          ],
           "star5Count": 1,
           "ersBonuses": [
             31
@@ -175,17 +188,8 @@
           "grade": "R",
           "model": "두산 굴삭기",
           "maxStars": 3,
-          "quantity": 2,
-          "starBreakdown": [
-            {
-              "stars": 3,
-              "qty": 1
-            },
-            {
-              "stars": 2,
-              "qty": 1
-            }
-          ],
+          "quantity": 1,
+          "starBreakdown": [],
           "star5Count": 0,
           "ersBonuses": [],
           "ersStatus": "not-applicable",
@@ -195,11 +199,22 @@
     },
     {
       "user": "구레긔",
-      "updatedAt": "2026-11-27T05:38:26.363Z",
-      "updatedAtKst": "2026-11-27T14:38:26.363+09:00",
-      "modelCount": 17,
-      "vehicleCount": 23,
+      "updatedAt": "2026-11-27T08:51:54.681Z",
+      "updatedAtKst": "2026-11-27T17:51:54.681+09:00",
+      "modelCount": 18,
+      "vehicleCount": 24,
       "vehicles": [
+        {
+          "grade": "SSR",
+          "model": "닛산 GT-R R35",
+          "maxStars": 1,
+          "quantity": 1,
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
+        },
         {
           "grade": "SSR",
           "model": "아우디 R8",
@@ -223,30 +238,8 @@
           "ersEvidence": []
         },
         {
-          "grade": "SR",
-          "model": "캐터필러 불도저",
-          "maxStars": 3,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "SR",
-          "model": "테슬라 사이버트럭",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "SR",
-          "model": "토요타 수프라",
+          "grade": "SSR",
+          "model": "포르쉐 911",
           "maxStars": 1,
           "quantity": 1,
           "starBreakdown": [],
@@ -301,19 +294,32 @@
         },
         {
           "grade": "S",
+          "model": "쉐보레 말리부",
+          "maxStars": 1,
+          "quantity": 1,
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
+        },
+        {
+          "grade": "S",
+          "model": "쉐보레 콜로라도",
+          "maxStars": 1,
+          "quantity": 1,
+          "starBreakdown": [],
+          "star5Count": 0,
+          "ersBonuses": [],
+          "ersStatus": "not-applicable",
+          "ersEvidence": []
+        },
+        {
+          "grade": "S",
           "model": "제네시스 G70",
-          "maxStars": 3,
-          "quantity": 2,
-          "starBreakdown": [
-            {
-              "stars": 3,
-              "qty": 1
-            },
-            {
-              "stars": 1,
-              "qty": 1
-            }
-          ],
+          "maxStars": 4,
+          "quantity": 1,
+          "starBreakdown": [],
           "star5Count": 0,
           "ersBonuses": [],
           "ersStatus": "not-applicable",
@@ -348,7 +354,7 @@
         {
           "grade": "S",
           "model": "현대 아반떼 N",
-          "maxStars": 3,
+          "maxStars": 4,
           "quantity": 1,
           "starBreakdown": [],
           "star5Count": 0,
@@ -398,7 +404,7 @@
           "grade": "R",
           "model": "두산 굴삭기",
           "maxStars": 5,
-          "quantity": 2,
+          "quantity": 3,
           "starBreakdown": [
             {
               "stars": 5,
@@ -406,7 +412,7 @@
             },
             {
               "stars": 1,
-              "qty": 1
+              "qty": 2
             }
           ],
           "star5Count": 1,
@@ -446,8 +452,8 @@
     },
     {
       "user": "피콜로",
-      "updatedAt": "2026-11-27T05:38:27.937Z",
-      "updatedAtKst": "2026-11-27T14:38:27.937+09:00",
+      "updatedAt": "2026-11-27T08:51:56.326Z",
+      "updatedAtKst": "2026-11-27T17:51:56.326+09:00",
       "modelCount": 20,
       "vehicleCount": 24,
       "vehicles": [
@@ -703,10 +709,10 @@
     },
     {
       "user": "ㅇ샘",
-      "updatedAt": "2026-11-27T05:38:29.393Z",
-      "updatedAtKst": "2026-11-27T14:38:29.393+09:00",
-      "modelCount": 17,
-      "vehicleCount": 18,
+      "updatedAt": "2026-11-27T08:51:57.893Z",
+      "updatedAtKst": "2026-11-27T17:51:57.893+09:00",
+      "modelCount": 13,
+      "vehicleCount": 13,
       "vehicles": [
         {
           "grade": "SSR",
@@ -722,7 +728,7 @@
         {
           "grade": "SR",
           "model": "아우디 RS6 아반트",
-          "maxStars": 1,
+          "maxStars": 2,
           "quantity": 1,
           "starBreakdown": [],
           "star5Count": 0,
@@ -744,7 +750,7 @@
         {
           "grade": "SR",
           "model": "테슬라 사이버트럭",
-          "maxStars": 2,
+          "maxStars": 3,
           "quantity": 1,
           "starBreakdown": [],
           "star5Count": 0,
@@ -775,17 +781,6 @@
           "ersEvidence": []
         },
         {
-          "grade": "SR",
-          "model": "BMW M4",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
           "grade": "S",
           "model": "기아 스팅어",
           "maxStars": 5,
@@ -804,17 +799,6 @@
           "grade": "S",
           "model": "쉐보레 말리부",
           "maxStars": 2,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "S",
-          "model": "쉐보레 콜로라도",
-          "maxStars": 1,
           "quantity": 1,
           "starBreakdown": [],
           "star5Count": 0,
@@ -863,17 +847,8 @@
           "grade": "R",
           "model": "기아 레이 EV",
           "maxStars": 4,
-          "quantity": 2,
-          "starBreakdown": [
-            {
-              "stars": 4,
-              "qty": 1
-            },
-            {
-              "stars": 2,
-              "qty": 1
-            }
-          ],
+          "quantity": 1,
+          "starBreakdown": [],
           "star5Count": 0,
           "ersBonuses": [],
           "ersStatus": "not-applicable",
@@ -889,36 +864,14 @@
           "ersBonuses": [],
           "ersStatus": "not-applicable",
           "ersEvidence": []
-        },
-        {
-          "grade": "R",
-          "model": "쉐보레 스파크",
-          "maxStars": 2,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "R",
-          "model": "현대 포터",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
         }
       ]
     },
     {
       "user": "영감",
-      "updatedAt": "2026-11-27T05:38:30.817Z",
-      "updatedAtKst": "2026-11-27T14:38:30.817+09:00",
-      "modelCount": 11,
+      "updatedAt": "2026-11-27T08:51:59.509Z",
+      "updatedAtKst": "2026-11-27T17:51:59.509+09:00",
+      "modelCount": 10,
       "vehicleCount": 16,
       "vehicles": [
         {
@@ -936,8 +889,17 @@
           "grade": "SR",
           "model": "BMW M4",
           "maxStars": 3,
-          "quantity": 1,
-          "starBreakdown": [],
+          "quantity": 2,
+          "starBreakdown": [
+            {
+              "stars": 3,
+              "qty": 1
+            },
+            {
+              "stars": 1,
+              "qty": 1
+            }
+          ],
           "star5Count": 0,
           "ersBonuses": [],
           "ersStatus": "not-applicable",
@@ -1010,17 +972,6 @@
         },
         {
           "grade": "R",
-          "model": "기아 레이 EV",
-          "maxStars": 1,
-          "quantity": 1,
-          "starBreakdown": [],
-          "star5Count": 0,
-          "ersBonuses": [],
-          "ersStatus": "not-applicable",
-          "ersEvidence": []
-        },
-        {
-          "grade": "R",
           "model": "대우 다마스",
           "maxStars": 2,
           "quantity": 3,
@@ -1083,8 +1034,8 @@
     },
     {
       "user": "톩끼",
-      "updatedAt": "2026-11-27T05:38:32.294Z",
-      "updatedAtKst": "2026-11-27T14:38:32.294+09:00",
+      "updatedAt": "2026-11-27T08:52:00.931Z",
+      "updatedAtKst": "2026-11-27T17:52:00.931+09:00",
       "modelCount": 12,
       "vehicleCount": 13,
       "vehicles": [
